@@ -332,11 +332,12 @@ def McpToolServer(req: func.HttpRequest) -> func.HttpResponse:
     error = None
 
     try:
-        # Get the Freshservice tools instance
-        fs_tools = get_freshservice_tools()
+        # Get the unified tools instance (Freshservice, Meraki, Intune)
+        from mcp_tools import get_unified_tools
+        unified_tools = get_unified_tools()
 
-        # Execute the tool
-        result = fs_tools.execute_tool(method_name, params)
+        # Execute the tool (automatically routes to correct backend)
+        result = unified_tools.execute_tool(method_name, params)
 
     except ValueError as ve:
         # Client error (invalid params, tool not found, etc.)

@@ -299,19 +299,18 @@ In monitored channels, I'll automatically start troubleshooting new support requ
     def handle_fresh(self, cmd) -> None:
         """
         Handle Freshservice commands via the MCP Orchestrator.
-        
-        Usage: 
+
+        Usage:
         - fresh what is the status of ticket 102?
         - fresh show me assets for john@example.com
         - fresh are there any changes planned?
         """
-        # 1. Extract query
-        # cmd.args_text contains everything after the command name
-        query_text = cmd.args_text
+        # 1. Extract query - use raw text for full context
+        query_text = cmd.raw_text
         if not query_text:
             self.slack.post_message(
                 channel=cmd.channel_id,
-                text="ℹ️ Please provide a query. Example: `!fresh status of ticket 12345`",
+                text="ℹ️ Please provide a query. Example: `@bot fresh status of ticket 12345`",
                 thread_ts=cmd.thread_ts
             )
             return

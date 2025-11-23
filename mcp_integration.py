@@ -1,7 +1,11 @@
 """
-Optimized MCP Integration for Gemini + Freshservice Tools.
+Optimized MCP Integration for Gemini + All IT Tools.
 
-This module provides an orchestrator that connects Google Gemini AI with Freshservice tools.
+This module provides an orchestrator that connects Google Gemini AI with all IT tools:
+- Freshservice (tickets, users, assets, changes)
+- Meraki (WiFi management)
+- Intune (device management)
+
 It uses DIRECT function calls for maximum performance instead of HTTP requests.
 """
 import logging
@@ -10,18 +14,19 @@ from google import genai
 from google.genai import types
 
 from config import Config
-from mcp_tools import get_freshservice_tools
+from mcp_tools import get_unified_tools
 
 
 class GeminiMCPOrchestrator:
     """
-    Orchestrates conversations between users, Gemini AI, and Freshservice tools.
+    Orchestrates conversations between users, Gemini AI, and ALL IT tools.
 
     This implementation uses DIRECT tool calls (no HTTP overhead) for optimal performance.
+    Gemini intelligently routes queries to the appropriate backend service.
     """
 
     def __init__(self):
-        """Initialize the orchestrator with Gemini API and Freshservice tools."""
+        """Initialize the orchestrator with Gemini API and all IT tools."""
         self.api_key = Config.GEMINI_API_KEY
 
         if not self.api_key:
@@ -30,19 +35,21 @@ class GeminiMCPOrchestrator:
 
         self.client = genai.Client(api_key=self.api_key)
         self.model_name = 'gemini-2.0-flash'
-        self.tools = self._define_freshservice_tools()
+        self.tools = self._define_all_tools()
 
-        # Get direct access to Freshservice tools (no HTTP required!)
-        self.fs_tools = get_freshservice_tools()
+        # Get direct access to ALL tools (Freshservice, Meraki, Intune)
+        self.unified_tools = get_unified_tools()
 
-    def _define_freshservice_tools(self) -> types.Tool:
+    def _define_all_tools(self) -> types.Tool:
         """
-        Define the Freshservice tool schemas for Gemini.
+        Define ALL tool schemas for Gemini (Freshservice, Meraki, Intune).
 
         These schemas tell Gemini what tools are available and how to use them.
+        Gemini will intelligently choose which tool to call based on the user's query.
         """
 
-        # 1. Get User by Email (crucial first step for user lookups)
+        # === FRESHSERVICE TOOLS ===
+
         get_user = types.FunctionDeclaration(
             name="get_user_by_email",
             description=(
@@ -61,7 +68,6 @@ class GeminiMCPOrchestrator:
             )
         )
 
-        # 2. List Tickets
         list_tickets = types.FunctionDeclaration(
             name="list_tickets",
             description="List support tickets associated with a specific user or agent ID.",
@@ -80,7 +86,6 @@ class GeminiMCPOrchestrator:
             )
         )
 
-        # 3. List Assets
         list_assets = types.FunctionDeclaration(
             name="list_assets",
             description="List IT assets (hardware/software) assigned to a specific user ID.",
@@ -96,7 +101,6 @@ class GeminiMCPOrchestrator:
             )
         )
 
-        # 4. List Recent Changes
         list_changes = types.FunctionDeclaration(
             name="list_recent_changes",
             description=(
@@ -109,11 +113,62 @@ class GeminiMCPOrchestrator:
             )
         )
 
-        return types.Tool(function_declarations=[get_user, list_tickets, list_assets, list_changes])
+        # === MERAKI TOOLS ===
+
+        update_ssid = types.FunctionDeclaration(
+            name="update_ssid_password",
+            description=(
+                "Update the WiFi password for an SSID across all Meraki networks. "
+                "Use this when users need to change WiFi passwords or update network security."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "ssid_name": types.Schema(
+                        type=types.Type.STRING,
+                        description="The name of the WiFi network (SSID) to update."
+                    ),
+                    "new_password": types.Schema(
+                        type=types.Type.STRING,
+                        description="The new WiFi password (minimum 8 characters)."
+                    )
+                },
+                required=["ssid_name", "new_password"]
+            )
+        )
+
+        # === INTUNE TOOLS ===
+
+        reboot_device = types.FunctionDeclaration(
+            name="reboot_device",
+            description=(
+                "Send a remote reboot command to a device via Intune. "
+                "Use this when a device needs to be restarted remotely for troubleshooting."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "serial_number": types.Schema(
+                        type=types.Type.STRING,
+                        description="The device serial number to reboot."
+                    )
+                },
+                required=["serial_number"]
+            )
+        )
+
+        return types.Tool(function_declarations=[
+            # Freshservice
+            get_user, list_tickets, list_assets, list_changes,
+            # Meraki
+            update_ssid,
+            # Intune
+            reboot_device
+        ])
 
     def process_query(self, user_query: str, user_email: Optional[str] = None) -> str:
         """
-        Orchestrate the conversation between user, Gemini, and Freshservice tools.
+        Orchestrate the conversation between user, Gemini, and ALL IT tools.
 
         Args:
             user_query: The user's question or request
@@ -125,12 +180,19 @@ class GeminiMCPOrchestrator:
         Raises:
             Exception: If Gemini API fails or tools encounter errors
         """
-        # Build system instruction for helpful behavior
+        # Build system instruction for intelligent routing
         system_instr = (
-            "You are a helpful IT Support Assistant integrated with Freshservice. "
-            "Use the available tools to look up information and help users. "
+            "You are an intelligent IT Support Assistant with access to multiple systems:\n"
+            "- Freshservice: IT tickets, user info, assets, change requests\n"
+            "- Meraki: WiFi network management (update passwords, check networks)\n"
+            "- Intune: Device management (remote reboot, device status)\n\n"
+            "When a user asks a question, intelligently choose which tool(s) to use based on their query. "
+            "For example:\n"
+            "- 'What's the status of my tickets?' → use Freshservice tools\n"
+            "- 'Update WiFi password' → use Meraki tools\n"
+            "- 'Reboot my laptop' → use Intune tools\n\n"
             "When looking up tickets or assets for the current user, first find their ID using their email. "
-            f"The current user's email is: {user_email if user_email else 'unknown'}. "
+            f"The current user's email is: {user_email if user_email else 'unknown'}.\n\n"
             "Be concise, friendly, and helpful in your responses."
         )
 
@@ -208,9 +270,10 @@ class GeminiMCPOrchestrator:
 
     def _execute_tool_directly(self, tool_name: str, args: dict) -> any:
         """
-        Execute a Freshservice tool DIRECTLY (no HTTP call).
+        Execute ANY IT tool DIRECTLY (no HTTP call).
 
         This is much faster and more efficient than making HTTP requests to an external MCP server.
+        Routes to the appropriate backend: Freshservice, Meraki, or Intune.
 
         Args:
             tool_name: The name of the tool to execute
@@ -220,8 +283,9 @@ class GeminiMCPOrchestrator:
             The tool result (could be dict, list, etc.)
         """
         try:
-            # Call the tool directly using our FreshserviceTools instance
-            result = self.fs_tools.execute_tool(tool_name, args)
+            # Call the tool directly using our UnifiedTools instance
+            # It will automatically route to the correct backend (Freshservice/Meraki/Intune)
+            result = self.unified_tools.execute_tool(tool_name, args)
             logging.info(f"Tool {tool_name} executed successfully")
             return result
 
