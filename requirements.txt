@@ -1,0 +1,22 @@
+# Azure Functions
+azure-functions>=1.18.0
+
+# Azure Storage
+azure-data-tables>=12.4.0
+azure-core>=1.28.0
+
+# Slack SDK
+slack-sdk>=3.23.0
+
+# Meraki API
+meraki>=1.40.0
+
+# Google Gemini
+google-generativeai>=0.3.0
+google-genai
+
+# HTTP Requests
+requests>=2.31.0
+
+# Type hints support (if using Python <3.10)
+typing-extensions>=4.8.0
