@@ -15,6 +15,10 @@ meraki>=1.40.0
 google-generativeai>=0.3.0
 google-genai
 
+# MCP Server
+fastmcp>=0.2.0
+pydantic>=2.0.0
+
 # HTTP Requests
 requests>=2.31.0
 

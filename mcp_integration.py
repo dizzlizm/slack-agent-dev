@@ -1,36 +1,61 @@
-import os
-import json
-import time
+"""
+Optimized MCP Integration for Gemini + Freshservice Tools.
+
+This module provides an orchestrator that connects Google Gemini AI with Freshservice tools.
+It uses DIRECT function calls for maximum performance instead of HTTP requests.
+"""
 import logging
-import requests
+from typing import Optional
 from google import genai
 from google.genai import types
-from config import Config # Assuming your Config class handles env vars
+
+from config import Config
+from mcp_tools import get_freshservice_tools
+
 
 class GeminiMCPOrchestrator:
+    """
+    Orchestrates conversations between users, Gemini AI, and Freshservice tools.
+
+    This implementation uses DIRECT tool calls (no HTTP overhead) for optimal performance.
+    """
+
     def __init__(self):
-        self.api_key = Config.GEMINI_API_KEY 
-        self.mcp_server_url = Config.MCP_TOOL_SERVER_URL
-        
-        if not self.api_key or not self.mcp_server_url:
-            logging.error("Missing GEMINI_API_KEY or MCP_TOOL_SERVER_URL configuration.")
-            raise ValueError("Gemini/MCP Configuration missing.")
+        """Initialize the orchestrator with Gemini API and Freshservice tools."""
+        self.api_key = Config.GEMINI_API_KEY
+
+        if not self.api_key:
+            logging.error("Missing GEMINI_API_KEY configuration.")
+            raise ValueError("Gemini configuration missing.")
 
         self.client = genai.Client(api_key=self.api_key)
         self.model_name = 'gemini-2.0-flash'
         self.tools = self._define_freshservice_tools()
 
+        # Get direct access to Freshservice tools (no HTTP required!)
+        self.fs_tools = get_freshservice_tools()
+
     def _define_freshservice_tools(self) -> types.Tool:
-        """Defines the Freshservice tool schemas for Gemini."""
-        
-        # 1. Get User (The crucial first step for most queries)
+        """
+        Define the Freshservice tool schemas for Gemini.
+
+        These schemas tell Gemini what tools are available and how to use them.
+        """
+
+        # 1. Get User by Email (crucial first step for user lookups)
         get_user = types.FunctionDeclaration(
             name="get_user_by_email",
-            description="Lookup a Freshservice user (requester or agent) by email to get their numeric ID. ALWAYS call this first if you only have an email.",
+            description=(
+                "Lookup a Freshservice user (requester or agent) by email to get their numeric ID. "
+                "ALWAYS call this first if you only have an email and need to look up tickets or assets."
+            ),
             parameters=types.Schema(
                 type=types.Type.OBJECT,
                 properties={
-                    "email": types.Schema(type=types.Type.STRING, description="The email address to search for.")
+                    "email": types.Schema(
+                        type=types.Type.STRING,
+                        description="The email address to search for."
+                    )
                 },
                 required=["email"]
             )
@@ -39,12 +64,18 @@ class GeminiMCPOrchestrator:
         # 2. List Tickets
         list_tickets = types.FunctionDeclaration(
             name="list_tickets",
-            description="List support tickets associated with a user or agent ID.",
+            description="List support tickets associated with a specific user or agent ID.",
             parameters=types.Schema(
                 type=types.Type.OBJECT,
                 properties={
-                    "requester_id": types.Schema(type=types.Type.INTEGER, description="Optional. The numeric ID of the requester (user)."),
-                    "agent_id": types.Schema(type=types.Type.INTEGER, description="Optional. The numeric ID of the agent (tech).")
+                    "requester_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Optional. The numeric ID of the requester (user)."
+                    ),
+                    "agent_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Optional. The numeric ID of the agent (tech)."
+                    )
                 }
             )
         )
@@ -56,46 +87,69 @@ class GeminiMCPOrchestrator:
             parameters=types.Schema(
                 type=types.Type.OBJECT,
                 properties={
-                    "user_id": types.Schema(type=types.Type.INTEGER, description="The numeric ID of the user.")
+                    "user_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="The numeric ID of the user to check assets for."
+                    )
                 },
                 required=["user_id"]
             )
         )
 
-        # 4. List Changes
+        # 4. List Recent Changes
         list_changes = types.FunctionDeclaration(
             name="list_recent_changes",
-            description="List recent Change Requests to check for maintenance or outages.",
+            description=(
+                "List recent Change Requests to check for planned maintenance or outages. "
+                "Use this when users report widespread issues or connectivity problems."
+            ),
             parameters=types.Schema(
                 type=types.Type.OBJECT,
-                properties={}, 
+                properties={}  # No parameters required
             )
         )
 
         return types.Tool(function_declarations=[get_user, list_tickets, list_assets, list_changes])
 
-    def process_query(self, user_query: str, user_email: str = None) -> str:
+    def process_query(self, user_query: str, user_email: Optional[str] = None) -> str:
         """
-        Orchestrates the conversation between User, Gemini, and the Azure MCP Server.
+        Orchestrate the conversation between user, Gemini, and Freshservice tools.
+
+        Args:
+            user_query: The user's question or request
+            user_email: Optional email of the current user (for context)
+
+        Returns:
+            The final response from Gemini after tool execution
+
+        Raises:
+            Exception: If Gemini API fails or tools encounter errors
         """
-        # System prompt to give the bot context and helpful behaviors
+        # Build system instruction for helpful behavior
         system_instr = (
             "You are a helpful IT Support Assistant integrated with Freshservice. "
-            "Use the available tools to look up information. "
-            "If you are looking up tickets or assets for the current user, try to find their ID using their email first. "
-            f"The current user's email is: {user_email if user_email else 'unknown'}."
+            "Use the available tools to look up information and help users. "
+            "When looking up tickets or assets for the current user, first find their ID using their email. "
+            f"The current user's email is: {user_email if user_email else 'unknown'}. "
+            "Be concise, friendly, and helpful in your responses."
         )
 
-        history = [types.Content(role="user", parts=[types.Part.from_text(text=user_query)])]
-        
-        max_iterations = 8
+        # Initialize conversation history with user's query
+        history = [
+            types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=user_query)]
+            )
+        ]
+
+        max_iterations = 10  # Prevent infinite loops
         final_response = "I'm sorry, I couldn't complete that request."
 
         for i in range(max_iterations):
-            logging.info(f"MCP Orchestrator Iteration {i+1}")
-            
+            logging.info(f"MCP Orchestrator - Iteration {i + 1}/{max_iterations}")
+
             try:
-                # Ask Gemini
+                # Ask Gemini to respond (may include tool calls)
                 response = self.client.models.generate_content(
                     model=self.model_name,
                     contents=history,
@@ -105,29 +159,30 @@ class GeminiMCPOrchestrator:
                     )
                 )
             except Exception as e:
-                logging.error(f"Gemini API Error: {e}")
-                return f"⚠️ I encountered an error talking to my AI brain: {str(e)}"
+                logging.error(f"Gemini API Error: {e}", exc_info=True)
+                return f"⚠️ I encountered an error connecting to my AI: {str(e)}"
 
-            # Check for Tool Calls
+            # Check if Gemini wants to call a tool
             if response.function_calls:
-                # We only handle the first call in the list for simplicity in this loop
+                # Process the first function call
                 tool_call = response.function_calls[0]
                 tool_name = tool_call.name
                 tool_args = dict(tool_call.args)
-                
-                logging.info(f"Executing Tool: {tool_name} with {tool_args}")
-                
-                # Execute against Azure MCP Server
-                tool_result = self._call_azure_mcp_server(tool_name, tool_args)
-                
-                # Add interaction to history so Gemini sees the result
+
+                logging.info(f"Executing Tool: {tool_name} with args {tool_args}")
+
+                # Execute tool DIRECTLY (no HTTP request!)
+                tool_result = self._execute_tool_directly(tool_name, tool_args)
+
+                # Add the model's tool call to history
                 history.append(types.Content(
-                    role="model", 
+                    role="model",
                     parts=[types.Part(function_call=tool_call)]
                 ))
-                
+
+                # Add the tool result to history
                 history.append(types.Content(
-                    role="tool", 
+                    role="tool",
                     parts=[types.Part(
                         function_response=types.FunctionResponse(
                             name=tool_name,
@@ -135,32 +190,49 @@ class GeminiMCPOrchestrator:
                         )
                     )]
                 ))
+
+                # Continue loop to let Gemini process the result
+                continue
+
             else:
                 # No tool call means we have the final answer
                 if response.text:
                     final_response = response.text
+                else:
+                    # Sometimes Gemini returns empty text
+                    final_response = "I processed your request but don't have additional information to share."
+
                 break
-        
+
         return final_response
 
-    def _call_azure_mcp_server(self, tool_name: str, args: dict) -> any:
-        """Sends the JSON-RPC request to the remote Azure Function."""
-        payload = {
-            "jsonrpc": "2.0",
-            "method": tool_name,
-            "params": args,
-            "id": f"slack-{int(time.time())}"
-        }
-        
+    def _execute_tool_directly(self, tool_name: str, args: dict) -> any:
+        """
+        Execute a Freshservice tool DIRECTLY (no HTTP call).
+
+        This is much faster and more efficient than making HTTP requests to an external MCP server.
+
+        Args:
+            tool_name: The name of the tool to execute
+            args: Dictionary of arguments for the tool
+
+        Returns:
+            The tool result (could be dict, list, etc.)
+        """
         try:
-            resp = requests.post(self.mcp_server_url, json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            
-            if "error" in data:
-                return f"Tool Error: {data['error']['message']}"
-            return data.get("result")
-            
-        except Exception as e:
-            logging.error(f"Azure MCP Server Call Failed: {e}")
-            return f"System Error: Could not reach IT tools server. {str(e)}"
+            # Call the tool directly using our FreshserviceTools instance
+            result = self.fs_tools.execute_tool(tool_name, args)
+            logging.info(f"Tool {tool_name} executed successfully")
+            return result
+
+        except ValueError as ve:
+            # Tool not found, invalid parameters, or configuration missing
+            error_msg = f"Tool Error: {str(ve)}"
+            logging.warning(f"Tool execution failed (client error): {ve}")
+            return error_msg
+
+        except Exception as ex:
+            # Unexpected error (network, API failure, etc.)
+            error_msg = f"System Error: Could not execute tool. {str(ex)}"
+            logging.error(f"Tool execution failed (server error): {ex}", exc_info=True)
+            return error_msg
