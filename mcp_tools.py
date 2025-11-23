@@ -1,6 +1,7 @@
 """
-Freshservice MCP Tools - Core Logic
-Provides Freshservice integration tools that can be called directly or via HTTP.
+Unified MCP Tools - Core Logic
+Provides integration tools for Freshservice, Meraki, and Intune.
+All tools can be called directly (internal) or via HTTP (JSON-RPC).
 """
 import logging
 import urllib.parse
@@ -310,8 +311,202 @@ class FreshserviceTools:
             raise ValueError(f"Invalid parameters for tool '{tool_name}': {str(e)}")
 
 
-# Singleton instance
+# =========================================================================
+# MERAKI TOOLS
+# =========================================================================
+
+class MerakiTools:
+    """Core Meraki tool implementations for network management."""
+
+    def __init__(self):
+        """Initialize Meraki tools with configuration."""
+        self.api_key = Config.MERAKI_API_KEY
+        self.org_id = Config.MERAKI_ORG_ID
+
+        if not self.api_key or not self.org_id:
+            logging.warning("Meraki not configured. Tools will return errors.")
+
+    def _ensure_configured(self) -> None:
+        """Raise error if Meraki is not configured."""
+        if not self.api_key or not self.org_id:
+            raise ValueError("Meraki configuration missing (MERAKI_API_KEY and MERAKI_ORG_ID required).")
+
+    @retry_on_failure(max_retries=2, backoff_factor=1.0)
+    def update_ssid_password(self, ssid_name: str, new_password: str) -> Dict[str, Any]:
+        """
+        Update WiFi password for an SSID across all networks.
+
+        Args:
+            ssid_name: The name of the SSID to update
+            new_password: The new password (minimum 8 characters)
+
+        Returns:
+            Dictionary with update results
+
+        Raises:
+            ValueError: If configuration missing or parameters invalid
+        """
+        self._ensure_configured()
+
+        # Input validation
+        if not ssid_name or not isinstance(ssid_name, str):
+            raise ValueError("SSID name must be a non-empty string")
+        if not new_password or len(new_password) < 8:
+            raise ValueError("Password must be at least 8 characters")
+
+        try:
+            import meraki
+            dashboard = meraki.DashboardAPI(api_key=self.api_key, suppress_logging=True)
+
+            networks = dashboard.organizations.getOrganizationNetworks(self.org_id)
+            updated_count = 0
+
+            for network in networks:
+                for ssid_num in range(15):  # Check all SSID slots
+                    try:
+                        ssid = dashboard.wireless.getNetworkWirelessSsid(network['id'], str(ssid_num))
+
+                        if ssid_name.lower() in ssid.get('name', '').lower():
+                            dashboard.wireless.updateNetworkWirelessSsid(
+                                network['id'],
+                                str(ssid_num),
+                                psk=new_password
+                            )
+                            updated_count += 1
+                    except:
+                        continue
+
+            return {
+                "success": updated_count > 0,
+                "updated_count": updated_count,
+                "message": f"Updated {updated_count} SSID(s) matching '{ssid_name}'"
+            }
+
+        except Exception as e:
+            logging.error(f"Error updating SSID password: {e}")
+            raise ValueError(f"Failed to update SSID: {str(e)}")
+
+
+# =========================================================================
+# INTUNE TOOLS
+# =========================================================================
+
+class IntuneTools:
+    """Core Intune tool implementations for device management."""
+
+    def __init__(self):
+        """Initialize Intune tools with configuration."""
+        self.webhook_url = Config.INTUNE_REBOOT_WEBHOOK_URL
+
+        if not self.webhook_url:
+            logging.warning("Intune not configured. Tools will return errors.")
+
+    def _ensure_configured(self) -> None:
+        """Raise error if Intune is not configured."""
+        if not self.webhook_url:
+            raise ValueError("Intune configuration missing (INTUNE_REBOOT_WEBHOOK_URL required).")
+
+    @retry_on_failure(max_retries=2, backoff_factor=2.0)
+    def reboot_device(self, serial_number: str) -> Dict[str, Any]:
+        """
+        Reboot a device via Intune webhook.
+
+        Args:
+            serial_number: The device serial number
+
+        Returns:
+            Dictionary with reboot result
+
+        Raises:
+            ValueError: If configuration missing or operation fails
+        """
+        self._ensure_configured()
+
+        # Input validation
+        if not serial_number or not isinstance(serial_number, str):
+            raise ValueError("Serial number must be a non-empty string")
+
+        url = f"{self.webhook_url}&serialNumber={serial_number}"
+
+        try:
+            response = requests.post(url, timeout=120)
+
+            if response.status_code == 200:
+                return {
+                    "success": True,
+                    "message": f"Reboot command sent successfully for device {serial_number}",
+                    "details": response.text
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": f"Failed to reboot device: HTTP {response.status_code}",
+                    "details": response.text
+                }
+
+        except requests.exceptions.Timeout:
+            raise ValueError("Request timed out after 120 seconds")
+        except requests.RequestException as e:
+            logging.error(f"Error rebooting device: {e}")
+            raise ValueError(f"Failed to reboot device: {str(e)}")
+
+
+# =========================================================================
+# UNIFIED TOOL REGISTRY
+# =========================================================================
+
+class UnifiedTools:
+    """
+    Unified tool registry that combines all available tools.
+    This allows Gemini to intelligently route to any backend service.
+    """
+
+    def __init__(self):
+        """Initialize all tool instances."""
+        self.freshservice = FreshserviceTools()
+        self.meraki = MerakiTools()
+        self.intune = IntuneTools()
+
+    def execute_tool(self, tool_name: str, params: Dict[str, Any]) -> Any:
+        """
+        Execute any tool by name with given parameters.
+
+        Args:
+            tool_name: The name of the tool to execute
+            params: Dictionary of parameters
+
+        Returns:
+            The tool result
+
+        Raises:
+            ValueError: If tool not found or execution fails
+        """
+        # Freshservice tools
+        if tool_name in ["get_user_by_email", "list_tickets", "list_assets", "list_recent_changes"]:
+            return self.freshservice.execute_tool(tool_name, params)
+
+        # Meraki tools
+        elif tool_name == "update_ssid_password":
+            return self.meraki.update_ssid_password(**params)
+
+        # Intune tools
+        elif tool_name == "reboot_device":
+            return self.intune.reboot_device(**params)
+
+        else:
+            available = [
+                "get_user_by_email", "list_tickets", "list_assets", "list_recent_changes",
+                "update_ssid_password", "reboot_device"
+            ]
+            raise ValueError(f"Tool '{tool_name}' not found. Available tools: {available}")
+
+
+# =========================================================================
+# SINGLETON INSTANCES
+# =========================================================================
+
 _freshservice_tools: Optional[FreshserviceTools] = None
+_unified_tools: Optional[UnifiedTools] = None
 
 
 def get_freshservice_tools() -> FreshserviceTools:
@@ -320,3 +515,11 @@ def get_freshservice_tools() -> FreshserviceTools:
     if _freshservice_tools is None:
         _freshservice_tools = FreshserviceTools()
     return _freshservice_tools
+
+
+def get_unified_tools() -> UnifiedTools:
+    """Get or create the singleton UnifiedTools instance (all services)."""
+    global _unified_tools
+    if _unified_tools is None:
+        _unified_tools = UnifiedTools()
+    return _unified_tools
