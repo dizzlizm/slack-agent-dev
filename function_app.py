@@ -39,6 +39,7 @@ _command_router: Optional[CommandRouter] = None
 _command_handlers: Optional[CommandHandlers] = None
 _interactive_handler: Optional[InteractiveHandler] = None
 _triage_workflow: Optional[TriageWorkflow] = None
+_mcp_orchestrator: Optional[any] = None  # GeminiMCPOrchestrator singleton
 _initialized = False
 
 
@@ -46,7 +47,7 @@ def initialize_app() -> None:
     """Initialize all services and handlers (called on first request)."""
     global _slack_client, _auth_manager, _conversation_manager, _triage_manager
     global _command_router, _command_handlers, _interactive_handler, _triage_workflow
-    global _initialized
+    global _mcp_orchestrator, _initialized
     
     if _initialized:
         return
@@ -73,12 +74,22 @@ def initialize_app() -> None:
         _auth_manager = AuthorizationManager(auth_table)
         _conversation_manager = ConversationManager(convo_table)
         _triage_manager = TriageSessionManager(triage_table)
-        
-        # Initialize command system
+
+        # Initialize MCP orchestrator if Gemini is enabled (needed by command handlers)
+        if Config.is_gemini_enabled():
+            try:
+                from mcp_integration import GeminiMCPOrchestrator
+                _mcp_orchestrator = GeminiMCPOrchestrator()
+                logging.info("✅ MCP Orchestrator initialized")
+            except Exception as e:
+                logging.warning(f"MCP Orchestrator not initialized: {e}")
+
+        # Initialize command system (pass MCP orchestrator for 'fresh' command)
         _command_handlers = CommandHandlers(
             _slack_client,
             _auth_manager,
-            _conversation_manager
+            _conversation_manager,
+            _mcp_orchestrator  # Pass singleton orchestrator
         )
         
         _command_router = CommandRouter()
@@ -109,7 +120,7 @@ def initialize_app() -> None:
                 _slack_client,
                 _triage_manager
             )
-        
+
         _initialized = True
         logging.info("✅ Bot initialization complete")
         logging.info(f"✅ Registered commands: {_command_router.get_available_commands()}")
@@ -486,5 +497,12 @@ def _process_interactive_payload(payload_str: str) -> None:
 # =========================================================================
 # STARTUP
 # =========================================================================
+
+def get_mcp_orchestrator():
+    """Get the singleton MCP orchestrator instance."""
+    if not _initialized:
+        initialize_app()
+    return _mcp_orchestrator
+
 
 logging.info("Slack bot Azure Functions module loaded")
