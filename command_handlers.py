@@ -7,8 +7,6 @@ from typing import Optional
 
 from command_parser import (
     ParsedCommand,
-    parse_meraki_update_command,
-    parse_intune_command,
     parse_admin_command,
     require_args
 )
@@ -16,8 +14,6 @@ from slack_client import SlackClientWrapper
 from auth_manager import AuthorizationManager
 from conversation_manager import ConversationManager
 from gemini_service import GeminiService
-from meraki_service import MerakiService
-from intune_service import IntuneService
 from exceptions import (
     BotException,
     IntegrationNotConfiguredError,
@@ -43,30 +39,13 @@ class CommandHandlers:
 
         # Initialize services lazily
         self._gemini: Optional[GeminiService] = None
-        self._meraki: Optional[MerakiService] = None
-        self._intune: Optional[IntuneService] = None
-    
+
     @property
     def gemini(self) -> GeminiService:
         """Get Gemini service (lazy init)."""
         if self._gemini is None:
             self._gemini = GeminiService()
         return self._gemini
-    
-  
-    @property
-    def meraki(self) -> MerakiService:
-        """Get Meraki service (lazy init)."""
-        if self._meraki is None:
-            self._meraki = MerakiService()
-        return self._meraki
-    
-    @property
-    def intune(self) -> IntuneService:
-        """Get Intune service (lazy init)."""
-        if self._intune is None:
-            self._intune = IntuneService()
-        return self._intune
     
     def handle_help(self, cmd: ParsedCommand) -> None:
         """Show help message with available commands."""
@@ -206,86 +185,6 @@ In monitored channels, I automatically start troubleshooting new support request
             channel=cmd.channel_id,
             text=message
         )
-    
-    def handle_meraki(self, cmd: ParsedCommand) -> None:
-        """Handle Meraki SSID update commands."""
-        self.auth.require_authorization(cmd.user_id)
-        
-        # Parse command
-        ssid_name, new_password = parse_meraki_update_command(cmd.raw_text)
-        
-        # Create confirmation message with buttons
-        confirmation_text = (
-            f"You are about to change the password for all SSIDs named *{ssid_name}* "
-            f"to `{new_password}`. Please confirm."
-        )
-        
-        button_payload = {
-            "ssid": ssid_name,
-            "password": new_password
-        }
-        
-        self.slack.post_message(
-            channel=cmd.channel_id,
-            text=confirmation_text,
-            blocks=[
-                {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": confirmation_text}
-                },
-                {
-                    "type": "actions",
-                    "elements": [
-                        {
-                            "type": "button",
-                            "text": {"type": "plain_text", "text": "Confirm ✅"},
-                            "style": "primary",
-                            "value": json.dumps(button_payload),
-                            "action_id": "meraki_confirm_update"
-                        },
-                        {
-                            "type": "button",
-                            "text": {"type": "plain_text", "text": "Cancel ❌"},
-                            "style": "danger",
-                            "action_id": "meraki_cancel_update"
-                        }
-                    ]
-                }
-            ]
-        )
-    
-    def handle_intune(self, cmd: ParsedCommand) -> None:
-        """Handle Intune device commands."""
-        self.auth.require_authorization(cmd.user_id)
-        
-        subcommand, serial_number = parse_intune_command(cmd)
-        
-        if subcommand == "reboot":
-            self.slack.post_message(
-                channel=cmd.channel_id,
-                text=f"🚀 Roger that! Sending reboot command for serial `{serial_number}`. "
-                     "I'll let you know the result..."
-            )
-            
-            # Execute reboot (this could take a while)
-            try:
-                success, message = self.intune.reboot_device(serial_number)
-                
-                if success:
-                    response = f"✅ <@{cmd.user_id}> Success: {message}"
-                else:
-                    response = f"❌ <@{cmd.user_id}> {message}"
-                
-                self.slack.post_message(
-                    channel=cmd.channel_id,
-                    text=response
-                )
-                
-            except BotException as e:
-                self.slack.post_message(
-                    channel=cmd.channel_id,
-                    text=f"❌ <@{cmd.user_id}> {e.user_friendly_message}"
-                )
     
     def handle_smart(self, cmd) -> None:
         """
