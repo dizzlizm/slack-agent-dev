@@ -50,11 +50,11 @@ class GeminiMCPOrchestrator:
 
         # === FRESHSERVICE TOOLS ===
 
-        get_user = types.FunctionDeclaration(
+        get_user_email = types.FunctionDeclaration(
             name="get_user_by_email",
             description=(
                 "Lookup a Freshservice user (requester or agent) by email to get their numeric ID. "
-                "ALWAYS call this first if you only have an email and need to look up tickets or assets."
+                "Use this when you have an email address."
             ),
             parameters=types.Schema(
                 type=types.Type.OBJECT,
@@ -65,6 +65,28 @@ class GeminiMCPOrchestrator:
                     )
                 },
                 required=["email"]
+            )
+        )
+
+        get_user_name = types.FunctionDeclaration(
+            name="get_user_by_name",
+            description=(
+                "Search for Freshservice users by first and/or last name. "
+                "Use this when you have a person's name but not their email. "
+                "Returns a list of matching users."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "first_name": types.Schema(
+                        type=types.Type.STRING,
+                        description="The first name to search for (optional if last_name provided)."
+                    ),
+                    "last_name": types.Schema(
+                        type=types.Type.STRING,
+                        description="The last name to search for (optional if first_name provided)."
+                    )
+                }
             )
         )
 
@@ -159,7 +181,7 @@ class GeminiMCPOrchestrator:
 
         return types.Tool(function_declarations=[
             # Freshservice
-            get_user, list_tickets, list_assets, list_changes,
+            get_user_email, get_user_name, list_tickets, list_assets, list_changes,
             # Meraki
             update_ssid,
             # Intune

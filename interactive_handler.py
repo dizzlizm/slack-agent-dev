@@ -7,7 +7,6 @@ from typing import Dict, Any
 
 from slack_client import SlackClientWrapper
 from auth_manager import AuthorizationManager
-from meraki_service import MerakiService
 from triage_manager import TriageSessionManager
 from exceptions import BotException
 
@@ -24,16 +23,9 @@ class InteractiveHandler:
         self.slack = slack_client
         self.auth = auth_manager
         self.triage = triage_manager
-        
+
         # Lazy-loaded services
-        self._meraki = None
         self._freshservice = None
-    
-    @property
-    def meraki(self) -> MerakiService:
-        if self._meraki is None:
-            self._meraki = MerakiService()
-        return self._meraki
      
     def handle_payload(self, payload: Dict[str, Any]) -> None:
         """
@@ -65,11 +57,7 @@ class InteractiveHandler:
         
         # Route to appropriate handler
         try:
-            if action_id == "meraki_confirm_update":
-                self.handle_meraki_confirm(payload)
-            elif action_id == "meraki_cancel_update":
-                self.handle_meraki_cancel(payload)
-            elif action_id == "fresh_confirm_create":
+            if action_id == "fresh_confirm_create":
                 self.handle_fresh_confirm(payload)
             elif action_id == "fresh_cancel_create":
                 self.handle_fresh_cancel(payload)
@@ -90,72 +78,7 @@ class InteractiveHandler:
                 text=f"❌ An unexpected error occurred: {e}",
                 thread_ts=message_ts
             )
-    
-    def handle_meraki_confirm(self, payload: Dict[str, Any]) -> None:
-        """Handle Meraki password update confirmation."""
-        channel_id = payload['channel']['id']
-        message_ts = payload['message']['ts']
-        user_id = payload['user']['id']
-        
-        # Parse button value
-        button_value = json.loads(payload['actions'][0]['value'])
-        ssid_name = button_value['ssid']
-        new_password = button_value['password']
-        
-        # Update message to show progress
-        self.slack.update_message(
-            channel=channel_id,
-            ts=message_ts,
-            text=f"🚀 Roger that! Updating all SSIDs named *{ssid_name}*. Please wait...",
-            blocks=[]
-        )
-        
-        try:
-            # Execute the update
-            result = self.meraki.update_ssids_by_name(ssid_name, new_password)
-            
-            if result['total_updated'] == 0:
-                response = f"⚠️ Could not find any SSIDs named *{ssid_name}* to update."
-            else:
-                # Build summary
-                summary_lines = [
-                    f"✅ **Password Update Complete!**",
-                    f"Updated {result['total_updated']} SSID(s) across {result['networks_affected']} network(s):\n"
-                ]
-                
-                for detail in result['details']:
-                    summary_lines.append(
-                        f"• ✅ {detail['ssids_updated']} SSID(s) on network *{detail['network_name']}*"
-                    )
-                
-                response = "\n".join(summary_lines)
-            
-            self.slack.post_message(
-                channel=channel_id,
-                text=response,
-                thread_ts=message_ts
-            )
-            
-        except BotException as e:
-            logging.error(f"Meraki update failed: {e}")
-            self.slack.post_message(
-                channel=channel_id,
-                text=f"❌ <@{user_id}> {e.user_friendly_message}",
-                thread_ts=message_ts
-            )
-    
-    def handle_meraki_cancel(self, payload: Dict[str, Any]) -> None:
-        """Handle Meraki password update cancellation."""
-        channel_id = payload['channel']['id']
-        message_ts = payload['message']['ts']
-        
-        self.slack.update_message(
-            channel=channel_id,
-            ts=message_ts,
-            text="🚫 Operation cancelled by user.",
-            blocks=[]
-        )
-    
+
     def handle_fresh_confirm(self, payload: Dict[str, Any]) -> None:
         """Handle Freshservice ticket creation confirmation."""
         channel_id = payload['channel']['id']

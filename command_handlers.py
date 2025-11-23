@@ -7,8 +7,6 @@ from typing import Optional
 
 from command_parser import (
     ParsedCommand,
-    parse_meraki_update_command,
-    parse_intune_command,
     parse_admin_command,
     require_args
 )
@@ -16,8 +14,6 @@ from slack_client import SlackClientWrapper
 from auth_manager import AuthorizationManager
 from conversation_manager import ConversationManager
 from gemini_service import GeminiService
-from meraki_service import MerakiService
-from intune_service import IntuneService
 from exceptions import (
     BotException,
     IntegrationNotConfiguredError,
@@ -43,9 +39,7 @@ class CommandHandlers:
 
         # Initialize services lazily
         self._gemini: Optional[GeminiService] = None
-        self._meraki: Optional[MerakiService] = None
-        self._intune: Optional[IntuneService] = None
-    
+
     @property
     def gemini(self) -> GeminiService:
         """Get Gemini service (lazy init)."""
@@ -53,67 +47,43 @@ class CommandHandlers:
             self._gemini = GeminiService()
         return self._gemini
     
-  
-    @property
-    def meraki(self) -> MerakiService:
-        """Get Meraki service (lazy init)."""
-        if self._meraki is None:
-            self._meraki = MerakiService()
-        return self._meraki
-    
-    @property
-    def intune(self) -> IntuneService:
-        """Get Intune service (lazy init)."""
-        if self._intune is None:
-            self._intune = IntuneService()
-        return self._intune
-    
     def handle_help(self, cmd: ParsedCommand) -> None:
         """Show help message with available commands."""
         help_text = """
-Hello! I'm the Systems Bot. Here are my commands:
+👋 Hello! I'm your intelligent IT assistant powered by AI.
 
-*General Commands:*
-• `@Systems help` - Shows this message
+*🎯 Just Ask Me Naturally:*
+• `@Systems help me with user john.smith@company.com`
+• `@Systems what tickets does jane.doe@company.com have?`
+• `@Systems update guest WiFi password to NewSecure2024`
+• `@Systems reboot device ABC123`
+• `@Systems are there any planned outages?`
+• `@Systems show assets for john smith`
 
-*Admin Commands:* (requires authorization)
-• `@Systems admin add @user` - Authorizes a user
-• `@Systems admin remove @user` - Removes authorization
+I understand natural language - **no special syntax needed!** 🚀
 
-*AI Assistant:* (requires authorization)
-• `@Systems ask <question>` - Ask a question (maintains context)
-• `@Systems reset` - Clear your conversation history
+*📋 Available Services:*
+• IT Tickets (Freshservice)
+• User Management
+• WiFi/Network (Meraki)
+• Device Management (Intune)
+• Asset Tracking
+• Change Management
+
+*🔒 Admin Commands:*
+• `@Systems admin add @user` - Grant admin access
+• `@Systems admin remove @user` - Revoke admin access
+
+*💬 Q&A Commands:*
+• `@Systems ask <question>` - Ask any tech question
+• `@Systems reset` - Clear conversation history
 """
-        
-        # Add integration-specific help only if enabled
-        if Config.is_meraki_enabled():
-            help_text += """
-*Meraki Commands:* (requires authorization)
-• `@Systems meraki update ssid "SSID Name" password "NewPassword"` - Update SSID password
-"""
-        
-        if Config.is_intune_enabled():
-            help_text += """
-*Intune Commands:* (requires authorization)
-• `@Systems intune reboot "SerialNumber"` - Reboot a device
-"""
-        
-        if Config.is_freshservice_enabled():
-            help_text += """
-*Freshservice Commands:* (requires authorization)
-• `@Systems fresh help` - Show all Freshservice commands
-• `@Systems fresh ticket #123` - Get ticket details
-• `@Systems fresh mytickets` - Show your open tickets
-• `@Systems fresh asset <serial>` - Find asset by serial
-• `@Systems fresh user <email>` - Lookup user info
-• `@Systems fresh solution <query>` - Search knowledge base
-"""
-        
+
         # Add triage info if Gemini is enabled
         if Config.is_gemini_enabled() and Config.MONITORED_SLACK_CHANNEL_IDS:
             help_text += """
-*Automatic Triage:*
-In monitored channels, I'll automatically start troubleshooting new support requests.
+*🤖 Automatic Triage:*
+In monitored channels, I automatically start troubleshooting new support requests without needing to @mention me.
 """
         
         self.slack.post_message(
@@ -216,109 +186,36 @@ In monitored channels, I'll automatically start troubleshooting new support requ
             text=message
         )
     
-    def handle_meraki(self, cmd: ParsedCommand) -> None:
-        """Handle Meraki SSID update commands."""
-        self.auth.require_authorization(cmd.user_id)
-        
-        # Parse command
-        ssid_name, new_password = parse_meraki_update_command(cmd.raw_text)
-        
-        # Create confirmation message with buttons
-        confirmation_text = (
-            f"You are about to change the password for all SSIDs named *{ssid_name}* "
-            f"to `{new_password}`. Please confirm."
-        )
-        
-        button_payload = {
-            "ssid": ssid_name,
-            "password": new_password
-        }
-        
-        self.slack.post_message(
-            channel=cmd.channel_id,
-            text=confirmation_text,
-            blocks=[
-                {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": confirmation_text}
-                },
-                {
-                    "type": "actions",
-                    "elements": [
-                        {
-                            "type": "button",
-                            "text": {"type": "plain_text", "text": "Confirm ✅"},
-                            "style": "primary",
-                            "value": json.dumps(button_payload),
-                            "action_id": "meraki_confirm_update"
-                        },
-                        {
-                            "type": "button",
-                            "text": {"type": "plain_text", "text": "Cancel ❌"},
-                            "style": "danger",
-                            "action_id": "meraki_cancel_update"
-                        }
-                    ]
-                }
-            ]
-        )
-    
-    def handle_intune(self, cmd: ParsedCommand) -> None:
-        """Handle Intune device commands."""
-        self.auth.require_authorization(cmd.user_id)
-        
-        subcommand, serial_number = parse_intune_command(cmd)
-        
-        if subcommand == "reboot":
-            self.slack.post_message(
-                channel=cmd.channel_id,
-                text=f"🚀 Roger that! Sending reboot command for serial `{serial_number}`. "
-                     "I'll let you know the result..."
-            )
-            
-            # Execute reboot (this could take a while)
-            try:
-                success, message = self.intune.reboot_device(serial_number)
-                
-                if success:
-                    response = f"✅ <@{cmd.user_id}> Success: {message}"
-                else:
-                    response = f"❌ <@{cmd.user_id}> {message}"
-                
-                self.slack.post_message(
-                    channel=cmd.channel_id,
-                    text=response
-                )
-                
-            except BotException as e:
-                self.slack.post_message(
-                    channel=cmd.channel_id,
-                    text=f"❌ <@{cmd.user_id}> {e.user_friendly_message}"
-                )
-    
-    def handle_fresh(self, cmd) -> None:
+    def handle_smart(self, cmd) -> None:
         """
-        Handle Freshservice commands via the MCP Orchestrator.
+        Intelligent IT support handler - routes to ANY service automatically.
 
-        Usage:
-        - fresh what is the status of ticket 102?
-        - fresh show me assets for john@example.com
-        - fresh are there any changes planned?
+        Gemini AI automatically determines which backend service to use:
+        - Freshservice (tickets, users, assets, changes)
+        - Meraki (WiFi management)
+        - Intune (device management)
+
+        Usage Examples:
+        - @systems help me with user john.smith@company.com
+        - @systems update guest WiFi password to NewPass123
+        - @systems reboot device ABC123
+        - @systems what tickets does jane.doe@company.com have?
+        - @systems are there any planned maintenance windows?
         """
         # 1. Extract query - use raw text for full context
         query_text = cmd.raw_text
         if not query_text:
             self.slack.post_message(
                 channel=cmd.channel_id,
-                text="ℹ️ Please provide a query. Example: `@bot fresh status of ticket 12345`",
+                text="ℹ️ Please describe what you need help with. Example: `@systems help me with user john@company.com`",
                 thread_ts=cmd.thread_ts
             )
             return
 
         # 2. Acknowledge (Latency hiding)
-        slack_post =  self.slack.post_message(
+        slack_post = self.slack.post_message(
             channel=cmd.channel_id,
-            text="🤖 *Checking Freshservice...*",
+            text="🤖 *Working on it...*",
             thread_ts=cmd.thread_ts
         )
         update_ts = slack_post.get("ts")

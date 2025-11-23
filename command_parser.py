@@ -117,44 +117,59 @@ class CommandParser:
 
 class CommandRouter:
     """Routes commands to appropriate handlers."""
-    
+
     def __init__(self):
         self.handlers: Dict[str, Callable] = {}
+        self.default_handler: Optional[Callable] = None
         self.parser = CommandParser()
-    
+
     def register(self, command: str, handler: Callable) -> None:
         """
         Register a command handler.
-        
+
         Args:
             command: The command name
             handler: The handler function
         """
         self.handlers[command] = handler
         logging.debug(f"Registered handler for command: {command}")
-    
+
+    def set_default_handler(self, handler: Callable) -> None:
+        """
+        Set a default handler for unknown commands.
+
+        Args:
+            handler: The default handler function
+        """
+        self.default_handler = handler
+        logging.debug("Registered default handler for unknown commands")
+
     def route(self, parsed_command: ParsedCommand) -> Callable:
         """
         Get the handler for a command.
-        
+
         Args:
             parsed_command: The parsed command
-            
+
         Returns:
             The handler function
-            
+
         Raises:
-            InvalidCommandError: If command is not recognized
+            InvalidCommandError: If command is not recognized and no default handler
         """
         handler = self.handlers.get(parsed_command.command)
-        
+
         if not handler:
+            # Use default handler if available
+            if self.default_handler:
+                return self.default_handler
+
             available_commands = ", ".join(sorted(self.handlers.keys()))
             raise InvalidCommandError(
                 f"Unknown command: {parsed_command.command}",
                 f"@{Config.SLACK_BOT_USER_ID} help"
             )
-        
+
         return handler
     
     def get_available_commands(self) -> list[str]:

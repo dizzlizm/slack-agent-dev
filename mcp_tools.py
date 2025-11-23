@@ -149,6 +149,83 @@ class FreshserviceTools:
         raise ValueError(f"User with email '{email}' not found.")
 
     @retry_on_failure(max_retries=3, backoff_factor=0.5)
+    def get_user_by_name(self, first_name: Optional[str] = None, last_name: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Search for users by first and/or last name.
+
+        Args:
+            first_name: Optional first name to search for
+            last_name: Optional last name to search for
+
+        Returns:
+            List of matching user dictionaries with id, first_name, last_name, type, email
+
+        Raises:
+            ValueError: If neither name provided or configuration missing
+        """
+        self._ensure_configured()
+
+        # Input validation
+        if not first_name and not last_name:
+            raise ValueError("Must provide at least first_name or last_name")
+
+        # Build search query
+        query_parts = []
+        if first_name:
+            query_parts.append(f"first_name:'{first_name}'")
+        if last_name:
+            query_parts.append(f"last_name:'{last_name}'")
+
+        query = " AND ".join(query_parts)
+        encoded_query = urllib.parse.quote(query)
+
+        results = []
+
+        # Search Requesters
+        url = f"https://{self.domain}/api/v2/requesters?query=\"{encoded_query}\""
+
+        try:
+            response = requests.get(url, auth=self._get_auth(), headers=self._get_headers(), timeout=10)
+
+            if response.status_code == 200:
+                requesters = response.json().get("requesters", [])
+                for user in requesters:
+                    results.append({
+                        "id": user["id"],
+                        "first_name": user["first_name"],
+                        "last_name": user["last_name"],
+                        "type": "requester",
+                        "email": user["primary_email"]
+                    })
+        except requests.RequestException as e:
+            logging.error(f"Error searching requesters by name: {e}")
+
+        # Search Agents
+        url_agent = f"https://{self.domain}/api/v2/agents?query=\"{encoded_query}\""
+
+        try:
+            response_agent = requests.get(url_agent, auth=self._get_auth(), headers=self._get_headers(), timeout=10)
+
+            if response_agent.status_code == 200:
+                agents = response_agent.json().get("agents", [])
+                for agent in agents:
+                    results.append({
+                        "id": agent["id"],
+                        "first_name": agent["first_name"],
+                        "last_name": agent["last_name"],
+                        "type": "agent",
+                        "email": agent["email"]
+                    })
+        except requests.RequestException as e:
+            logging.error(f"Error searching agents by name: {e}")
+
+        if not results:
+            name_str = f"{first_name or ''} {last_name or ''}".strip()
+            raise ValueError(f"No users found matching name '{name_str}'")
+
+        return results[:10]  # Limit to 10 results
+
+    @retry_on_failure(max_retries=3, backoff_factor=0.5)
     def list_tickets(self, requester_id: Optional[int] = None, agent_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         Lists tickets filtered by requester or agent.
@@ -293,6 +370,7 @@ class FreshserviceTools:
         """
         tool_map = {
             "get_user_by_email": self.get_user_by_email,
+            "get_user_by_name": self.get_user_by_name,
             "list_tickets": self.list_tickets,
             "list_assets": self.list_assets,
             "list_recent_changes": self.list_recent_changes
@@ -482,7 +560,7 @@ class UnifiedTools:
             ValueError: If tool not found or execution fails
         """
         # Freshservice tools
-        if tool_name in ["get_user_by_email", "list_tickets", "list_assets", "list_recent_changes"]:
+        if tool_name in ["get_user_by_email", "get_user_by_name", "list_tickets", "list_assets", "list_recent_changes"]:
             return self.freshservice.execute_tool(tool_name, params)
 
         # Meraki tools
@@ -495,7 +573,7 @@ class UnifiedTools:
 
         else:
             available = [
-                "get_user_by_email", "list_tickets", "list_assets", "list_recent_changes",
+                "get_user_by_email", "get_user_by_name", "list_tickets", "list_assets", "list_recent_changes",
                 "update_ssid_password", "reboot_device"
             ]
             raise ValueError(f"Tool '{tool_name}' not found. Available tools: {available}")

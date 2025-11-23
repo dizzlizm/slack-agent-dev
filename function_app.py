@@ -93,19 +93,19 @@ def initialize_app() -> None:
         )
         
         _command_router = CommandRouter()
+
+        # Register specific commands (non-MCP)
         _command_router.register("help", _command_handlers.handle_help)
         _command_router.register("admin", _command_handlers.handle_admin)
         _command_router.register("ask", _command_handlers.handle_ask)
         _command_router.register("reset", _command_handlers.handle_reset)
-        
-        if Config.is_meraki_enabled():
-            _command_router.register("meraki", _command_handlers.handle_meraki)
-        
-        if Config.is_intune_enabled():
-            _command_router.register("intune", _command_handlers.handle_intune)
-        
-        if Config.is_freshservice_enabled():
-            _command_router.register("fresh", _command_handlers.handle_fresh)
+
+        # Set default handler for ALL other commands → intelligent MCP routing
+        # This means ANY @systems <query> will go to Gemini for intelligent routing
+        # No need to say "@systems fresh" or "@systems meraki" - just "@systems help me with X"
+        if Config.is_gemini_enabled():
+            _command_router.set_default_handler(_command_handlers.handle_smart)
+            logging.info("✅ Intelligent MCP routing enabled - all unknown commands will be handled by AI")
         
         # Initialize interactive handler
         _interactive_handler = InteractiveHandler(
