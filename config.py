@@ -35,10 +35,14 @@ class Config:
     
     # MCP Server Configuration
     MCP_TOOL_SERVER_URL: Optional[str] = None
-    
-    # Freshservice Configuration
+
+    # Freshservice Configuration (for legacy direct API access)
     FRESH_DOMAIN: Optional[str] = None
     FRESH_API_KEY: Optional[str] = None
+
+    # Freshservice Configuration (for MCP tools)
+    FRESHSERVICE_DOMAIN: Optional[str] = None
+    FRESHSERVICE_API_KEY: Optional[str] = None
     
     # Intune Configuration
     INTUNE_REBOOT_WEBHOOK_URL: Optional[str] = None
@@ -85,8 +89,10 @@ class Config:
         cls.GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
         cls.FRESH_DOMAIN = os.environ.get("FRESH_DOMAIN")
         cls.FRESH_API_KEY = os.environ.get("FRESH_API_KEY")
+        cls.FRESHSERVICE_DOMAIN = os.environ.get("FRESHSERVICE_DOMAIN", cls.FRESH_DOMAIN)  # Fallback to FRESH_DOMAIN
+        cls.FRESHSERVICE_API_KEY = os.environ.get("FRESHSERVICE_API_KEY", cls.FRESH_API_KEY)  # Fallback to FRESH_API_KEY
         cls.INTUNE_REBOOT_WEBHOOK_URL = os.environ.get("INTUNE_REBOOT_WEBHOOK_URL")
-        cls.MCP_TOOL_SERVER_URL =  os.environ.get("MCP_TOOL_SERVER_URL")
+        cls.MCP_TOOL_SERVER_URL = os.environ.get("MCP_TOOL_SERVER_URL")
         
         # Optional overrides
         if max_history := os.environ.get("MAX_CONVERSATION_HISTORY"):

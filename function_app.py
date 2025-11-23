@@ -21,6 +21,7 @@ from command_handlers import CommandHandlers
 from interactive_handler import InteractiveHandler
 from triage_workflow import TriageWorkflow
 from exceptions import BotException
+from mcp_tools import get_freshservice_tools
 
 # =========================================================================
 # INITIALIZATION
@@ -247,7 +248,7 @@ def HealthCheck(req: func.HttpRequest) -> func.HttpResponse:
     """
     try:
         initialize_app()
-        
+
         health_status = {
             "status": "healthy",
             "integrations": {
@@ -258,13 +259,13 @@ def HealthCheck(req: func.HttpRequest) -> func.HttpResponse:
             },
             "monitored_channels": len(Config.MONITORED_SLACK_CHANNEL_IDS)
         }
-        
+
         return func.HttpResponse(
             json.dumps(health_status, indent=2),
             status_code=200,
             mimetype="application/json"
         )
-        
+
     except Exception as e:
         error_response = {
             "status": "unhealthy",
@@ -275,6 +276,78 @@ def HealthCheck(req: func.HttpRequest) -> func.HttpResponse:
             status_code=503,
             mimetype="application/json"
         )
+
+
+@app.route(route="mcp/tools", auth_level=func.AuthLevel.FUNCTION, methods=['POST'])
+def McpToolServer(req: func.HttpRequest) -> func.HttpResponse:
+    """
+    MCP Tool Server endpoint for Freshservice tools.
+    Handles JSON-RPC 2.0 requests for Freshservice operations.
+
+    This endpoint allows the bot (or external clients) to execute Freshservice tools
+    via a standardized JSON-RPC interface.
+    """
+    logging.info('MCP Tool Server received a request.')
+
+    try:
+        req_body = req.get_json()
+    except ValueError:
+        logging.error("Invalid JSON in MCP request body")
+        return func.HttpResponse("Invalid JSON", status_code=400)
+
+    # Initialize app to ensure config is loaded
+    initialize_app()
+
+    # Extract JSON-RPC fields
+    method_name = req_body.get("method")
+    params = req_body.get("params", {})
+    req_id = req_body.get("id")
+
+    if not method_name:
+        error_response = {
+            "jsonrpc": "2.0",
+            "error": {"code": -32600, "message": "Invalid Request: method is required"},
+            "id": req_id
+        }
+        return func.HttpResponse(
+            json.dumps(error_response),
+            mimetype="application/json",
+            status_code=200
+        )
+
+    logging.info(f"MCP Tool Request: {method_name} with params {params}")
+
+    result = None
+    error = None
+
+    try:
+        # Get the Freshservice tools instance
+        fs_tools = get_freshservice_tools()
+
+        # Execute the tool
+        result = fs_tools.execute_tool(method_name, params)
+
+    except ValueError as ve:
+        # Client error (invalid params, tool not found, etc.)
+        logging.warning(f"Tool execution failed (client error): {ve}")
+        error = {"code": -32602, "message": str(ve)}
+
+    except Exception as ex:
+        # Server error (unexpected)
+        logging.error(f"Tool execution failed (server error): {ex}", exc_info=True)
+        error = {"code": -32603, "message": f"Internal Error: {str(ex)}"}
+
+    # Build JSON-RPC response
+    if error:
+        response_data = {"jsonrpc": "2.0", "error": error, "id": req_id}
+    else:
+        response_data = {"jsonrpc": "2.0", "result": result, "id": req_id}
+
+    return func.HttpResponse(
+        json.dumps(response_data),
+        mimetype="application/json",
+        status_code=200
+    )
 
 
 # =========================================================================
