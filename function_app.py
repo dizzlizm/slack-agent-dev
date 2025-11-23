@@ -195,31 +195,33 @@ def SlackEventsHandler(req: func.HttpRequest) -> func.HttpResponse:
             return func.HttpResponse(status_code=200)
         
         # Deduplicate: Check if we've seen this exact message recently
-        # (Slack sometimes sends duplicate events)
+        # (Slack sometimes sends duplicate events during retries)
         message_key = f"{channel_id}-{message_ts}"
-        #if hasattr(_handle_message_dedupe, 'recent_messages'):
-        #    if message_key in _handle_message_dedupe.recent_messages:
-        #        logging.warning(f"Duplicate message detected: {message_key}, ignoring")
-        #        return func.HttpResponse(status_code=200)
-        #    _handle_message_dedupe.recent_messages.add(message_key)
-        #    # Keep only last 100 message keys to prevent memory leak
-        #    if len(_handle_message_dedupe.recent_messages) > 100:
-        #        # Remove oldest (assuming FIFO isn't critical here)
-        #        _handle_message_dedupe.recent_messages.pop()
-        #else:
-        #    _handle_message_dedupe.recent_messages = {message_key}
+        if not hasattr(SlackEventsHandler, '_recent_messages'):
+            SlackEventsHandler._recent_messages = set()
+
+        if message_key in SlackEventsHandler._recent_messages:
+            logging.warning(f"Duplicate event detected: {message_key}, ignoring")
+            return func.HttpResponse(status_code=200)
+
+        SlackEventsHandler._recent_messages.add(message_key)
+
+        # Keep only last 1000 message keys to prevent memory leak
+        if len(SlackEventsHandler._recent_messages) > 1000:
+            # Remove oldest entries (convert to list, slice, convert back)
+            SlackEventsHandler._recent_messages = set(list(SlackEventsHandler._recent_messages)[-1000:])
         
         logging.info(f"[{user_id}] Message in {channel_id}: {text[:50]}...")
-        
-        # Route message to appropriate handler
-        _route_message(
-            text=text,
-            user_id=user_id,
-            channel_id=channel_id,
-            thread_ts=thread_ts,
-            message_ts=message_ts
+
+        # Process in background thread to avoid Slack 3-second timeout
+        # If we don't return 200 OK within 3 seconds, Slack will retry the event
+        thread = threading.Thread(
+            target=_route_message,
+            args=(text, user_id, channel_id, thread_ts, message_ts)
         )
-    
+        thread.start()
+
+    # Immediately return 200 OK to prevent Slack retries
     return func.HttpResponse(status_code=200)
 
 
