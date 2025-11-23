@@ -186,7 +186,7 @@ In monitored channels, I automatically start troubleshooting new support request
             text=message
         )
     
-    def handle_smart(self, cmd) -> None:
+    def handle_smart(self, cmd: ParsedCommand) -> None:
         """
         Intelligent IT support handler - routes to ANY service automatically.
 
