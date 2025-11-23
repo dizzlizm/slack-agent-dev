@@ -20,6 +20,19 @@ class ParsedCommand:
     channel_id: str
     thread_ts: Optional[str] = None
 
+    @property
+    def args_text(self) -> str:
+        """
+        Get the text of all arguments as a single string.
+        Extracts everything after the bot mention and command name.
+        """
+        # Remove bot mention and command from raw text
+        parts = self.raw_text.split(maxsplit=2)
+        if len(parts) > 2:
+            # parts[0] = bot mention, parts[1] = command, parts[2] = rest
+            return parts[2]
+        return ""
+
 
 class CommandParser:
     """Parses Slack messages into structured commands."""

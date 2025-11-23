@@ -33,12 +33,14 @@ class CommandHandlers:
         self,
         slack_client: SlackClientWrapper,
         auth_manager: AuthorizationManager,
-        conversation_manager: ConversationManager
+        conversation_manager: ConversationManager,
+        mcp_orchestrator: Optional[any] = None
     ):
         self.slack = slack_client
         self.auth = auth_manager
         self.conversation = conversation_manager
-        
+        self.mcp_orchestrator = mcp_orchestrator  # Singleton MCP orchestrator
+
         # Initialize services lazily
         self._gemini: Optional[GeminiService] = None
         self._meraki: Optional[MerakiService] = None
@@ -333,9 +335,15 @@ In monitored channels, I'll automatically start troubleshooting new support requ
             except Exception as e:
                 logging.warning(f"Could not fetch user context: {e}")
 
-            # 4. Run the MCP Orchestrator
-            # This handles the Loop: Gemini -> Azure MCP Server -> Gemini -> Final Answer
-            orchestrator = GeminiMCPOrchestrator()
+            # 4. Run the MCP Orchestrator (use singleton for performance)
+            # This handles the Loop: Gemini -> Direct Tool Calls -> Gemini -> Final Answer
+            if not self.mcp_orchestrator:
+                # Fallback: create instance if not provided (shouldn't happen in normal flow)
+                logging.warning("MCP Orchestrator not initialized, creating new instance")
+                orchestrator = GeminiMCPOrchestrator()
+            else:
+                orchestrator = self.mcp_orchestrator
+
             response_text = orchestrator.process_query(user_query=query_text, user_email=user_email)
 
             # 5. Reply with the Final Answer
