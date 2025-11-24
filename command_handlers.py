@@ -221,6 +221,9 @@ In monitored channels, I automatically start troubleshooting new support request
         user_mentions = re.findall(r'<@([A-Z0-9]+)>', query_text)
         mentioned_user_info = []
 
+        if user_mentions:
+            logging.info(f"Found {len(user_mentions)} @mentions in query: {user_mentions}")
+
         for mentioned_user_id in user_mentions:
             try:
                 user_info = self.slack.get_user_info(mentioned_user_id)
@@ -229,13 +232,19 @@ In monitored channels, I automatically start troubleshooting new support request
                     user_name = user_info.get("real_name", "Unknown")
                     if user_email:
                         mentioned_user_info.append(f"{user_name} ({user_email})")
-                        logging.info(f"Resolved @mention {mentioned_user_id} to {user_email}")
+                        logging.info(f"✅ Resolved @mention {mentioned_user_id} → {user_name} ({user_email})")
+                    else:
+                        logging.warning(f"⚠️ @mention {mentioned_user_id} has no email in profile")
             except Exception as e:
-                logging.warning(f"Could not resolve @mention {mentioned_user_id}: {e}")
+                logging.warning(f"❌ Could not resolve @mention {mentioned_user_id}: {e}")
 
         # Append mentioned users to the query for MCP context
         if mentioned_user_info:
-            query_text += f"\n\n[Mentioned users: {', '.join(mentioned_user_info)}]"
+            enriched_context = f"\n\n[Mentioned users: {', '.join(mentioned_user_info)}]"
+            query_text += enriched_context
+            logging.info(f"📧 Enriched query with user context: {enriched_context}")
+        else:
+            logging.info("ℹ️ No user mentions found or resolved")
 
         # 2. Acknowledge (Latency hiding)
         slack_post = self.slack.post_message(
