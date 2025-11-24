@@ -287,7 +287,8 @@ class GeminiMCPOrchestrator:
 
             "**Looking up users:**\n"
             "- If you see email addresses in the query (especially in [Mentioned users: ...] context), use get_user_by_email\n"
-            "- If you see names like 'John Smith' or 'Matt Abbott', use get_user_by_name\n"
+            "- If you see names like 'John Smith' or 'Jane Doe', use get_user_by_name\n"
+            "- If the request is for FreshService, get user_id\n"
             "- The [Mentioned users: ...] section contains emails extracted from Slack @mentions - use these!\n\n"
 
             "**Filtering results:**\n"
@@ -295,12 +296,14 @@ class GeminiMCPOrchestrator:
             "- YOU CAN AND SHOULD FILTER THESE RESULTS based on user criteria\n"
             "- Example: list_assets returns asset names like 'Lenovo ThinkPad T14' - filter for 'Lenovo' or 'laptop'\n"
             "- Example: list_tickets returns ticket subjects - filter for keywords the user mentioned\n"
+            "- Once you have a contextual FreshService ID use it.\n"
             "- Don't say 'I cannot filter' - you absolutely can filter results after getting them!\n\n"
 
             "**Multi-step workflows:**\n"
             "1. User asks about 'John's laptop' → call get_user_by_name → get user_id → call list_assets → filter for 'laptop'\n"
             "2. User asks 'what tickets does jane@company.com have?' → call get_user_by_email → call list_tickets\n"
-            "3. User mentions asset type (Lenovo, Dell, iPhone) → get ALL assets first, then filter by name\n\n"
+            "3. User mentions asset type (Lenovo, Dell, iPhone) → call get_user_by_name → get user_id → call list_assets → filter by name\n\n"
+            
 
             f"**Current user context:**\n"
             f"The requesting user's email is: {user_email if user_email else 'unknown'}\n"
@@ -311,6 +314,7 @@ class GeminiMCPOrchestrator:
             "- When showing multiple items, format them as a bulleted list\n"
             "- Include relevant details (ticket IDs, asset names, etc.)\n"
             "- If you can't find what they're asking for, explain what you checked and suggest alternatives"
+            "- If you are all out of Ideas offer to create a ticket using conversation details to escalate to a real person."
         )
 
         # Initialize conversation history with user's query
