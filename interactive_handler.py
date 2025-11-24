@@ -25,7 +25,15 @@ class InteractiveHandler:
         self.triage = triage_manager
 
         # Lazy-loaded services
-        self._freshservice = None
+        self._freshservice_tools = None
+
+    @property
+    def freshservice_tools(self):
+        """Get Freshservice MCP tools instance."""
+        if self._freshservice_tools is None:
+            from mcp_tools import FreshserviceTools
+            self._freshservice_tools = FreshserviceTools()
+        return self._freshservice_tools
      
     def handle_payload(self, payload: Dict[str, Any]) -> None:
         """
@@ -59,6 +67,8 @@ class InteractiveHandler:
         try:
             if action_id == "fresh_confirm_create":
                 self.handle_fresh_confirm(payload)
+            elif action_id.startswith("fresh_priority_"):
+                self.handle_fresh_priority_selection(payload)
             elif action_id == "fresh_cancel_create":
                 self.handle_fresh_cancel(payload)
             else:
@@ -80,60 +90,152 @@ class InteractiveHandler:
             )
 
     def handle_fresh_confirm(self, payload: Dict[str, Any]) -> None:
-        """Handle Freshservice ticket creation confirmation."""
+        """Handle initial ticket creation request - ask for priority first."""
         channel_id = payload['channel']['id']
         message_ts = payload['message']['ts']
-        
+
         # Parse button value
         button_value = json.loads(payload['actions'][0]['value'])
         title = button_value['title']
         description = button_value['description']
         original_user_id = button_value['user_id']
         original_ts = button_value['original_ts']
-        
+
+        # Update message to ask for priority
+        self.slack.update_message(
+            channel=channel_id,
+            ts=message_ts,
+            text="Please select a priority level for this ticket:",
+            blocks=[
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": (
+                            "📋 *Ready to create ticket!*\n\n"
+                            f"*Title:* {title}\n"
+                            f"*User:* <@{original_user_id}>\n\n"
+                            "Please select a priority level:"
+                        )
+                    }
+                },
+                {
+                    "type": "actions",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "🟢 Low"},
+                            "style": "primary",
+                            "value": json.dumps({
+                                "title": title,
+                                "description": description,
+                                "user_id": original_user_id,
+                                "original_ts": original_ts,
+                                "priority": 1
+                            }),
+                            "action_id": "fresh_priority_low"
+                        },
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "🟡 Medium"},
+                            "value": json.dumps({
+                                "title": title,
+                                "description": description,
+                                "user_id": original_user_id,
+                                "original_ts": original_ts,
+                                "priority": 2
+                            }),
+                            "action_id": "fresh_priority_medium"
+                        },
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "🟠 High"},
+                            "value": json.dumps({
+                                "title": title,
+                                "description": description,
+                                "user_id": original_user_id,
+                                "original_ts": original_ts,
+                                "priority": 3
+                            }),
+                            "action_id": "fresh_priority_high"
+                        },
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "🔴 Urgent"},
+                            "style": "danger",
+                            "value": json.dumps({
+                                "title": title,
+                                "description": description,
+                                "user_id": original_user_id,
+                                "original_ts": original_ts,
+                                "priority": 4
+                            }),
+                            "action_id": "fresh_priority_urgent"
+                        }
+                    ]
+                }
+            ]
+        )
+
+    def handle_fresh_priority_selection(self, payload: Dict[str, Any]) -> None:
+        """Handle priority selection and create the ticket."""
+        channel_id = payload['channel']['id']
+        message_ts = payload['message']['ts']
+
+        # Parse button value
+        button_value = json.loads(payload['actions'][0]['value'])
+        title = button_value['title']
+        description = button_value['description']
+        original_user_id = button_value['user_id']
+        original_ts = button_value['original_ts']
+        priority = button_value['priority']
+
+        priority_names = {1: "Low", 2: "Medium", 3: "High", 4: "Urgent"}
+
         # Update message
         self.slack.update_message(
             channel=channel_id,
             ts=message_ts,
-            text=f"✅ Got it! Creating a ticket for <@{original_user_id}>...",
+            text=f"✅ Creating {priority_names[priority]} priority ticket for <@{original_user_id}>...",
             blocks=[]
         )
-        
+
         try:
             # Update reactions on original message
             self.slack.remove_reaction(channel_id, original_ts, "eyes")
             self.slack.add_reaction(channel_id, original_ts, "ticket")
-            
-            # Get user info
+
+            # Get user email
             user_email = self.slack.get_user_email(original_user_id)
-            user_name = self.slack.get_user_real_name(original_user_id)
-            
-            # Create ticket
-            ticket_id, ticket_url = self.freshservice.create_ticket(
-                title=title,
+
+            # Create ticket using MCP tools
+            result = self.freshservice_tools.create_ticket(
+                subject=title,
                 description=description,
                 requester_email=user_email,
-                requester_name=user_name
+                priority=priority,
+                status=2  # Open
             )
-            
+
             # Post success message
             self.slack.post_message(
                 channel=channel_id,
                 text=(
                     f"✅ <@{original_user_id}> Success! "
-                    f"New ticket created: <{ticket_url}|Ticket #{ticket_id}>"
+                    f"New {priority_names[priority]} priority ticket created: "
+                    f"<{result['ticket_url']}|Ticket #{result['ticket_id']}>"
                 ),
                 thread_ts=original_ts
             )
-            
+
             # Clean up the triage session
             self.triage.delete_session(channel_id, original_ts)
-            
-        except BotException as e:
+
+        except Exception as e:
             logging.error(f"Ticket creation failed: {e}")
             self.slack.post_message(
                 channel=channel_id,
-                text=f"❌ <@{original_user_id}> {e.user_friendly_message}",
+                text=f"❌ <@{original_user_id}> Failed to create ticket: {str(e)}",
                 thread_ts=original_ts
             )
     

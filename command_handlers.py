@@ -202,6 +202,9 @@ In monitored channels, I automatically start troubleshooting new support request
         - @systems what tickets does jane.doe@company.com have?
         - @systems are there any planned maintenance windows?
         """
+        # SECURITY: Require admin authorization for MCP tools
+        self.auth.require_authorization(cmd.user_id)
+
         # 1. Extract query - use raw text for full context
         query_text = cmd.raw_text
         if not query_text:
@@ -211,6 +214,28 @@ In monitored channels, I automatically start troubleshooting new support request
                 thread_ts=cmd.thread_ts
             )
             return
+
+        # 1.5. Extract @user mentions and enrich query with emails
+        # If user says "@systems help @john", we'll look up john's email and add it to context
+        import re
+        user_mentions = re.findall(r'<@([A-Z0-9]+)>', query_text)
+        mentioned_user_info = []
+
+        for mentioned_user_id in user_mentions:
+            try:
+                user_info = self.slack.get_user_info(mentioned_user_id)
+                if user_info:
+                    user_email = user_info.get("profile", {}).get("email")
+                    user_name = user_info.get("real_name", "Unknown")
+                    if user_email:
+                        mentioned_user_info.append(f"{user_name} ({user_email})")
+                        logging.info(f"Resolved @mention {mentioned_user_id} to {user_email}")
+            except Exception as e:
+                logging.warning(f"Could not resolve @mention {mentioned_user_id}: {e}")
+
+        # Append mentioned users to the query for MCP context
+        if mentioned_user_info:
+            query_text += f"\n\n[Mentioned users: {', '.join(mentioned_user_info)}]"
 
         # 2. Acknowledge (Latency hiding)
         slack_post = self.slack.post_message(
