@@ -135,6 +135,78 @@ class GeminiMCPOrchestrator:
             )
         )
 
+        get_ticket_by_id = types.FunctionDeclaration(
+            name="get_ticket_by_id",
+            description="Get details about a specific ticket by its ID number.",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "ticket_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="The numeric ticket ID."
+                    )
+                },
+                required=["ticket_id"]
+            )
+        )
+
+        get_asset_by_id = types.FunctionDeclaration(
+            name="get_asset_by_id",
+            description="Get details about a specific IT asset by its ID number.",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "asset_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="The numeric asset ID."
+                    )
+                },
+                required=["asset_id"]
+            )
+        )
+
+        create_ticket = types.FunctionDeclaration(
+            name="create_ticket",
+            description=(
+                "Create a new support ticket in Freshservice. "
+                "Use this to log issues, requests, or incidents for users."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "subject": types.Schema(
+                        type=types.Type.STRING,
+                        description="The ticket subject/title (concise summary)."
+                    ),
+                    "description": types.Schema(
+                        type=types.Type.STRING,
+                        description="Detailed description of the issue or request."
+                    ),
+                    "requester_email": types.Schema(
+                        type=types.Type.STRING,
+                        description="Email address of the person requesting support."
+                    ),
+                    "priority": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Priority level: 1=Low, 2=Medium, 3=High, 4=Urgent. Default is 1."
+                    ),
+                    "status": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Ticket status: 2=Open, 3=Pending, 4=Resolved, 5=Closed. Default is 2."
+                    ),
+                    "group_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Optional group/queue ID to assign the ticket to."
+                    ),
+                    "category": types.Schema(
+                        type=types.Type.STRING,
+                        description="Optional category name for the ticket."
+                    )
+                },
+                required=["subject", "description", "requester_email"]
+            )
+        )
+
         # === MERAKI TOOLS ===
 
         update_ssid = types.FunctionDeclaration(
@@ -180,11 +252,12 @@ class GeminiMCPOrchestrator:
         )
 
         return types.Tool(function_declarations=[
-            # Freshservice
+            # Freshservice (8 tools)
             get_user_email, get_user_name, list_tickets, list_assets, list_changes,
-            # Meraki
+            get_ticket_by_id, get_asset_by_id, create_ticket,
+            # Meraki (1 tool)
             update_ssid,
-            # Intune
+            # Intune (1 tool)
             reboot_device
         ])
 
