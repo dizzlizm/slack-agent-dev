@@ -55,24 +55,10 @@ class CommandHandlers:
 *🎯 Just Ask Me Naturally:*
 • `@Systems help me with user john.smith@company.com`
 • `@Systems what tickets does jane.doe@company.com have?`
-• `@Systems update guest WiFi password to NewSecure2024`
 • `@Systems reboot device ABC123`
-• `@Systems are there any planned outages?`
 • `@Systems show assets for john smith`
 
 I understand natural language - **no special syntax needed!** 🚀
-
-*📋 Available Services:*
-• IT Tickets (Freshservice)
-• User Management
-• WiFi/Network (Meraki)
-• Device Management (Intune)
-• Asset Tracking
-• Change Management
-
-*🔒 Admin Commands:*
-• `@Systems admin add @user` - Grant admin access
-• `@Systems admin remove @user` - Revoke admin access
 
 *💬 Q&A Commands:*
 • `@Systems ask <question>` - Ask any tech question
@@ -113,7 +99,7 @@ In monitored channels, I automatically start troubleshooting new support request
     
     def handle_ask(self, cmd: ParsedCommand) -> None:
         """Handle AI assistant questions."""
-        self.auth.require_authorization(cmd.user_id)
+        #self.auth.require_authorization(cmd.user_id)
         
         # Extra safety: Don't process if somehow we're being called for our own messages
         if cmd.user_id == Config.SLACK_BOT_USER_ID:
@@ -153,7 +139,7 @@ In monitored channels, I automatically start troubleshooting new support request
             answer, response_time_ms = self.gemini.ask_question(question, history)
             
             # Format response with timing
-            response_text = f"💬 {answer}\n\n_(⚡ {response_time_ms}ms)_"
+            response_text = f"💬 {answer}"
             
             # Post response
             self.slack.update_message(

@@ -283,7 +283,7 @@ class FreshserviceTools:
             user_id: The numeric ID of the user
 
         Returns:
-            List of asset dictionaries with id, name, asset_tag, asset_type
+            List of asset dictionaries with id, name, asset_tag, asset_type, serial_number
 
         Raises:
             ValueError: If configuration missing
@@ -303,7 +303,8 @@ class FreshserviceTools:
                     "id": a["id"],
                     "name": a["name"],
                     "asset_tag": a.get("asset_tag"),
-                    "asset_type": a.get("asset_type_id")
+                    "asset_type": a.get("asset_type_id"),
+                    "serial_number": a.get("serial_number")
                 }
                 for a in assets
             ]
@@ -426,6 +427,7 @@ class FreshserviceTools:
                 "id": asset["id"],
                 "name": asset["name"],
                 "asset_tag": asset.get("asset_tag"),
+                "serial_number": asset.get("serial_number"),
                 "asset_type_id": asset.get("asset_type_id"),
                 "user_id": asset.get("user_id"),
                 "location_id": asset.get("location_id"),
