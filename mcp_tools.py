@@ -283,7 +283,7 @@ class FreshserviceTools:
             user_id: The numeric ID of the user
 
         Returns:
-            List of asset dictionaries with id, name, asset_tag, asset_type
+            List of comprehensive asset dictionaries with all available fields
 
         Raises:
             ValueError: If configuration missing
@@ -300,10 +300,39 @@ class FreshserviceTools:
 
             return [
                 {
+                    # Core identification
                     "id": a["id"],
                     "name": a["name"],
+                    "display_id": a.get("display_id"),
                     "asset_tag": a.get("asset_tag"),
-                    "asset_type": a.get("asset_type_id")
+
+                    # Product information
+                    "serial_number": a.get("serial_number"),
+                    "product_name": a.get("product_name"),
+                    "manufacturer": a.get("manufacturer"),
+                    "model": a.get("model"),
+                    "description": a.get("description"),
+
+                    # Type and classification
+                    "asset_type_id": a.get("asset_type_id"),
+                    "impact": a.get("impact"),
+                    "usage_type": a.get("usage_type"),
+
+                    # Assignment and location
+                    "user_id": a.get("user_id"),
+                    "location_id": a.get("location_id"),
+                    "department_id": a.get("department_id"),
+                    "assigned_on": a.get("assigned_on"),
+
+                    # Status and lifecycle
+                    "asset_state": a.get("asset_state"),
+                    "acquisition_date": a.get("acquisition_date"),
+                    "warranty_expiry_date": a.get("warranty_expiry_date"),
+                    "last_audit_date": a.get("last_audit_date"),
+
+                    # Metadata
+                    "created_at": a.get("created_at"),
+                    "updated_at": a.get("updated_at")
                 }
                 for a in assets
             ]
@@ -403,7 +432,7 @@ class FreshserviceTools:
             asset_id: The numeric asset ID
 
         Returns:
-            Dictionary with asset details
+            Dictionary with comprehensive asset details
 
         Raises:
             ValueError: If asset not found or configuration missing
@@ -423,13 +452,42 @@ class FreshserviceTools:
             asset = response.json().get("asset", {})
 
             return {
+                # Core identification
                 "id": asset["id"],
                 "name": asset["name"],
+                "display_id": asset.get("display_id"),
                 "asset_tag": asset.get("asset_tag"),
+
+                # Product information
+                "serial_number": asset.get("serial_number"),
+                "product_name": asset.get("product_name"),
+                "manufacturer": asset.get("manufacturer"),
+                "model": asset.get("model"),
+                "description": asset.get("description"),
+
+                # Type and classification
                 "asset_type_id": asset.get("asset_type_id"),
+                "impact": asset.get("impact"),
+                "usage_type": asset.get("usage_type"),
+
+                # Assignment and location
                 "user_id": asset.get("user_id"),
                 "location_id": asset.get("location_id"),
-                "department_id": asset.get("department_id")
+                "department_id": asset.get("department_id"),
+                "assigned_on": asset.get("assigned_on"),
+
+                # Status and lifecycle
+                "asset_state": asset.get("asset_state"),
+                "acquisition_date": asset.get("acquisition_date"),
+                "warranty_expiry_date": asset.get("warranty_expiry_date"),
+                "last_audit_date": asset.get("last_audit_date"),
+
+                # Metadata
+                "created_at": asset.get("created_at"),
+                "updated_at": asset.get("updated_at"),
+
+                # Additional fields
+                "author_type": asset.get("author_type")
             }
         except requests.RequestException as e:
             logging.error(f"Error getting asset #{asset_id}: {e}")
