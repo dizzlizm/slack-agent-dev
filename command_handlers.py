@@ -58,7 +58,7 @@ class CommandHandlers:
 • `@Systems help me with user john.smith@company.com`
 • `@Systems show @matt's lenovo laptop`
 • `@Systems what tickets does jane.doe@company.com have?`
-• `@Systems update guest WiFi password to NewSecure2024`
+• `@Systems create a ticket for @user about laptop issue`
 • `@Systems reboot device ABC123`
 
 **Questions & Info:**
@@ -70,8 +70,7 @@ I understand natural language and can access multiple IT systems automatically! 
 
 *📋 Available Services:*
 • IT Tickets (Freshservice)
-• User Management
-• WiFi/Network (Meraki)
+• User Management & Lookup
 • Device Management (Intune)
 • Asset Tracking
 • Change Management

@@ -25,11 +25,7 @@ class Config:
     AUTH_TABLE_NAME: str = "AuthorizedUsers"
     CONVO_TABLE_NAME: str = "ConversationHistory"
     TRIAGE_TABLE_NAME: str = "ActiveTriageSessions"
-    
-    # Meraki Configuration
-    MERAKI_API_KEY: Optional[str] = None
-    MERAKI_ORG_ID: Optional[str] = None
-    
+
     # Gemini Configuration
     GEMINI_API_KEY: Optional[str] = None
     
@@ -84,8 +80,6 @@ class Config:
             errors.append("AzureWebJobsStorage is required")
         
         # Optional integrations
-        cls.MERAKI_API_KEY = os.environ.get("MERAKI_API_KEY")
-        cls.MERAKI_ORG_ID = os.environ.get("MERAKI_ORG_ID")
         cls.GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
         cls.FRESH_DOMAIN = os.environ.get("FRESH_DOMAIN")
         cls.FRESH_API_KEY = os.environ.get("FRESH_API_KEY")
@@ -116,10 +110,7 @@ class Config:
         # Log warnings for optional features
         if not cls.GEMINI_API_KEY:
             logging.warning("GEMINI_API_KEY not set. AI features will be disabled.")
-        
-        if not cls.MERAKI_API_KEY or not cls.MERAKI_ORG_ID:
-            logging.warning("MERAKI_API_KEY or MERAKI_ORG_ID not set. Meraki features disabled.")
-        
+
         if not cls.FRESH_DOMAIN or not cls.FRESH_API_KEY:
             logging.warning("FRESH_DOMAIN or FRESH_API_KEY not set. Freshservice features disabled.")
         
@@ -127,12 +118,7 @@ class Config:
             logging.warning("INTUNE_REBOOT_WEBHOOK_URL not set. Intune features disabled.")
         
         logging.info("Configuration loaded successfully")
-    
-    @classmethod
-    def is_meraki_enabled(cls) -> bool:
-        """Check if Meraki integration is configured."""
-        return bool(cls.MERAKI_API_KEY and cls.MERAKI_ORG_ID)
-    
+
     @classmethod
     def is_gemini_enabled(cls) -> bool:
         """Check if Gemini integration is configured."""

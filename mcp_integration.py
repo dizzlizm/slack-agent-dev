@@ -207,30 +207,6 @@ class GeminiMCPOrchestrator:
             )
         )
 
-        # === MERAKI TOOLS ===
-
-        update_ssid = types.FunctionDeclaration(
-            name="update_ssid_password",
-            description=(
-                "Update the WiFi password for an SSID across all Meraki networks. "
-                "Use this when users need to change WiFi passwords or update network security."
-            ),
-            parameters=types.Schema(
-                type=types.Type.OBJECT,
-                properties={
-                    "ssid_name": types.Schema(
-                        type=types.Type.STRING,
-                        description="The name of the WiFi network (SSID) to update."
-                    ),
-                    "new_password": types.Schema(
-                        type=types.Type.STRING,
-                        description="The new WiFi password (minimum 8 characters)."
-                    )
-                },
-                required=["ssid_name", "new_password"]
-            )
-        )
-
         # === INTUNE TOOLS ===
 
         reboot_device = types.FunctionDeclaration(
@@ -255,8 +231,6 @@ class GeminiMCPOrchestrator:
             # Freshservice (8 tools)
             get_user_email, get_user_name, list_tickets, list_assets, list_changes,
             get_ticket_by_id, get_asset_by_id, create_ticket,
-            # Meraki (1 tool)
-            update_ssid,
             # Intune (1 tool)
             reboot_device
         ])
@@ -279,7 +253,6 @@ class GeminiMCPOrchestrator:
         system_instr = (
             "You are an intelligent IT Support Assistant with access to multiple systems:\n"
             "- Freshservice: IT tickets, user info, assets, change requests\n"
-            "- Meraki: WiFi network management (update passwords, check networks)\n"
             "- Intune: Device management (remote reboot, device status)\n\n"
 
             "## How to Handle User Queries\n"

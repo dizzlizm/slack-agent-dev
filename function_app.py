@@ -263,7 +263,6 @@ def HealthCheck(req: func.HttpRequest) -> func.HttpResponse:
         health_status = {
             "status": "healthy",
             "integrations": {
-                "meraki": Config.is_meraki_enabled(),
                 "gemini": Config.is_gemini_enabled(),
                 "freshservice": Config.is_freshservice_enabled(),
                 "intune": Config.is_intune_enabled()
