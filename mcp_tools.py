@@ -290,7 +290,8 @@ class FreshserviceTools:
         """
         self._ensure_configured()
 
-        url = f"https://{self.domain}/api/v2/assets?filter=\"user_id:{user_id}\""
+        # Include type_fields to get serial_number and other custom fields
+        url = f"https://{self.domain}/api/v2/assets?filter=\"user_id:{user_id}\"&include=type_fields"
 
         try:
             response = requests.get(url, auth=self._get_auth(), headers=self._get_headers(), timeout=10)
@@ -306,11 +307,11 @@ class FreshserviceTools:
                     "display_id": a.get("display_id"),
                     "asset_tag": a.get("asset_tag"),
 
-                    # Product information
-                    "serial_number": a.get("serial_number"),
-                    "product_name": a.get("product_name"),
-                    "manufacturer": a.get("manufacturer"),
-                    "model": a.get("model"),
+                    # Product information (from type_fields and direct fields)
+                    "serial_number": a.get("type_fields", {}).get("serial_number") or a.get("serial_number"),
+                    "product_name": a.get("type_fields", {}).get("product_name") or a.get("product_name"),
+                    "manufacturer": a.get("type_fields", {}).get("manufacturer") or a.get("manufacturer"),
+                    "model": a.get("type_fields", {}).get("model") or a.get("model"),
                     "description": a.get("description"),
 
                     # Type and classification
@@ -332,7 +333,10 @@ class FreshserviceTools:
 
                     # Metadata
                     "created_at": a.get("created_at"),
-                    "updated_at": a.get("updated_at")
+                    "updated_at": a.get("updated_at"),
+
+                    # Include all type_fields for reference
+                    "type_fields": a.get("type_fields", {})
                 }
                 for a in assets
             ]
@@ -439,7 +443,8 @@ class FreshserviceTools:
         """
         self._ensure_configured()
 
-        url = f"https://{self.domain}/api/v2/assets/{asset_id}"
+        # Include type_fields to get serial_number and other custom fields
+        url = f"https://{self.domain}/api/v2/assets/{asset_id}?include=type_fields"
 
         try:
             response = requests.get(url, auth=self._get_auth(), headers=self._get_headers(), timeout=10)
@@ -458,11 +463,11 @@ class FreshserviceTools:
                 "display_id": asset.get("display_id"),
                 "asset_tag": asset.get("asset_tag"),
 
-                # Product information
-                "serial_number": asset.get("serial_number"),
-                "product_name": asset.get("product_name"),
-                "manufacturer": asset.get("manufacturer"),
-                "model": asset.get("model"),
+                # Product information (from type_fields and direct fields)
+                "serial_number": asset.get("type_fields", {}).get("serial_number") or asset.get("serial_number"),
+                "product_name": asset.get("type_fields", {}).get("product_name") or asset.get("product_name"),
+                "manufacturer": asset.get("type_fields", {}).get("manufacturer") or asset.get("manufacturer"),
+                "model": asset.get("type_fields", {}).get("model") or asset.get("model"),
                 "description": asset.get("description"),
 
                 # Type and classification
@@ -485,9 +490,10 @@ class FreshserviceTools:
                 # Metadata
                 "created_at": asset.get("created_at"),
                 "updated_at": asset.get("updated_at"),
+                "author_type": asset.get("author_type"),
 
-                # Additional fields
-                "author_type": asset.get("author_type")
+                # Include all type_fields for reference
+                "type_fields": asset.get("type_fields", {})
             }
         except requests.RequestException as e:
             logging.error(f"Error getting asset #{asset_id}: {e}")
