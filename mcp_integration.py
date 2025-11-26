@@ -299,13 +299,14 @@ class GeminiMCPOrchestrator:
 
             f"**Current user context:**\n"
             f"The requesting user's email is: {user_email if user_email else 'unknown'}\n"
-            f"Use this when they ask about 'my tickets' or 'my assets'.\n\n"
+            f"If you need to look up this user, use the email in this context with get_user_by_email.\n\n"
 
-            "**Response style:**\n"
-            "- Be concise, friendly, and helpful\n"
-            "- When showing multiple items, format them as a bulleted list\n"
-            "- Include relevant details (ticket IDs, asset names, etc.)\n"
-            "- If you can't find what they're asking for, explain what you checked and suggest alternatives"
+            "Response Requirements\n"
+            "- Format: Be concise, friendly, and helpful. Use bulleted lists for multiple results (e.g., tickets, assets).\n"
+            "- Detail: Include relevant IDs (Ticket ID, Asset Name, Serial Number).\n"
+            "- No Tool Talk: Only mention the final result. Do not reveal the tool calls or the internal system names (Freshservice, Intune) in the final response.\n"
+            "- Failure: If you can't find what they're asking for, explain what you checked (e.g., 'I checked your open tickets but found none matching \"VPN\"').\n"
+            "- Escalation: If you have run out of relevant ideas or tools, offer to create a ticket using create_ticket with the conversation details to escalate to a real person."
         )
 
         # Initialize conversation history with user's query

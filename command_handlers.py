@@ -115,7 +115,7 @@ In monitored channels, I automatically start troubleshooting new support request
     
     def handle_ask(self, cmd: ParsedCommand) -> None:
         """Handle AI assistant questions."""
-        self.auth.require_authorization(cmd.user_id)
+        #self.auth.require_authorization(cmd.user_id)
         
         # Extra safety: Don't process if somehow we're being called for our own messages
         if cmd.user_id == Config.SLACK_BOT_USER_ID:
@@ -155,7 +155,7 @@ In monitored channels, I automatically start troubleshooting new support request
             answer, response_time_ms = self.gemini.ask_question(question, history)
             
             # Format response with timing
-            response_text = f"💬 {answer}\n\n_(⚡ {response_time_ms}ms)_"
+            response_text = f"💬 {answer}"
             
             # Post response
             self.slack.update_message(
@@ -188,7 +188,7 @@ In monitored channels, I automatically start troubleshooting new support request
             text=message
         )
     
-    def handle_smart(self, cmd) -> None:
+    def handle_smart(self, cmd: ParsedCommand) -> None:
         """
         Intelligent IT support handler - routes to ANY service automatically.
 
