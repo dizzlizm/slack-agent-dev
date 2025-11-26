@@ -565,82 +565,6 @@ class FreshserviceTools:
 
 
 # =========================================================================
-# MERAKI TOOLS
-# =========================================================================
-
-class MerakiTools:
-    """Core Meraki tool implementations for network management."""
-
-    def __init__(self):
-        """Initialize Meraki tools with configuration."""
-        self.api_key = Config.MERAKI_API_KEY
-        self.org_id = Config.MERAKI_ORG_ID
-
-        if not self.api_key or not self.org_id:
-            logging.warning("Meraki not configured. Tools will return errors.")
-
-    def _ensure_configured(self) -> None:
-        """Raise error if Meraki is not configured."""
-        if not self.api_key or not self.org_id:
-            raise ValueError("Meraki configuration missing (MERAKI_API_KEY and MERAKI_ORG_ID required).")
-
-    @retry_on_failure(max_retries=2, backoff_factor=1.0)
-    def update_ssid_password(self, ssid_name: str, new_password: str) -> Dict[str, Any]:
-        """
-        Update WiFi password for an SSID across all networks.
-
-        Args:
-            ssid_name: The name of the SSID to update
-            new_password: The new password (minimum 8 characters)
-
-        Returns:
-            Dictionary with update results
-
-        Raises:
-            ValueError: If configuration missing or parameters invalid
-        """
-        self._ensure_configured()
-
-        # Input validation
-        if not ssid_name or not isinstance(ssid_name, str):
-            raise ValueError("SSID name must be a non-empty string")
-        if not new_password or len(new_password) < 8:
-            raise ValueError("Password must be at least 8 characters")
-
-        try:
-            import meraki
-            dashboard = meraki.DashboardAPI(api_key=self.api_key, suppress_logging=True)
-
-            networks = dashboard.organizations.getOrganizationNetworks(self.org_id)
-            updated_count = 0
-
-            for network in networks:
-                for ssid_num in range(15):  # Check all SSID slots
-                    try:
-                        ssid = dashboard.wireless.getNetworkWirelessSsid(network['id'], str(ssid_num))
-
-                        if ssid_name.lower() in ssid.get('name', '').lower():
-                            dashboard.wireless.updateNetworkWirelessSsid(
-                                network['id'],
-                                str(ssid_num),
-                                psk=new_password
-                            )
-                            updated_count += 1
-                    except:
-                        continue
-
-            return {
-                "success": updated_count > 0,
-                "updated_count": updated_count,
-                "message": f"Updated {updated_count} SSID(s) matching '{ssid_name}'"
-            }
-
-        except Exception as e:
-            logging.error(f"Error updating SSID password: {e}")
-            raise ValueError(f"Failed to update SSID: {str(e)}")
-
-
-# =========================================================================
 # INTUNE TOOLS
 # =========================================================================
 
@@ -717,7 +641,6 @@ class UnifiedTools:
     def __init__(self):
         """Initialize all tool instances."""
         self.freshservice = FreshserviceTools()
-        self.meraki = MerakiTools()
         self.intune = IntuneTools()
 
     def execute_tool(self, tool_name: str, params: Dict[str, Any]) -> Any:
@@ -735,12 +658,9 @@ class UnifiedTools:
             ValueError: If tool not found or execution fails
         """
         # Freshservice tools
-        if tool_name in ["get_user_by_email", "get_user_by_name", "list_tickets", "list_assets", "list_recent_changes"]:
+        if tool_name in ["get_user_by_email", "get_user_by_name", "list_tickets", "list_assets", "list_recent_changes",
+                         "get_ticket_by_id", "get_asset_by_id", "create_ticket"]:
             return self.freshservice.execute_tool(tool_name, params)
-
-        # Meraki tools
-        elif tool_name == "update_ssid_password":
-            return self.meraki.update_ssid_password(**params)
 
         # Intune tools
         elif tool_name == "reboot_device":
@@ -749,7 +669,7 @@ class UnifiedTools:
         else:
             available = [
                 "get_user_by_email", "get_user_by_name", "list_tickets", "list_assets", "list_recent_changes",
-                "update_ssid_password", "reboot_device"
+                "get_ticket_by_id", "get_asset_by_id", "create_ticket", "reboot_device"
             ]
             raise ValueError(f"Tool '{tool_name}' not found. Available tools: {available}")
 

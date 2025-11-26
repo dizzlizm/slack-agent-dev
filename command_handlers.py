@@ -52,26 +52,42 @@ class CommandHandlers:
         help_text = """
 👋 Hello! I'm your intelligent IT assistant powered by AI.
 
-*🎯 Just Ask Me Naturally:*
+*🎯 Just Ask Me Naturally - No Special Commands Needed!*
+
+**IT Operations:**
 • `@Systems help me with user john.smith@company.com`
+• `@Systems show @matt's lenovo laptop`
 • `@Systems what tickets does jane.doe@company.com have?`
+• `@Systems create a ticket for @user about laptop issue`
 • `@Systems reboot device ABC123`
-• `@Systems show assets for john smith`
 
-I understand natural language - **no special syntax needed!** 🚀
+**Questions & Info:**
+• `@Systems are there any planned outages?`
+• `@Systems what is a VPN?`
+• `@Systems how do I reset my password?`
 
-*💬 Q&A Commands:*
-• `@Systems ask <question>` - Ask any tech question
-• `@Systems reset` - Clear conversation history
+I understand natural language and can access multiple IT systems automatically! 🚀
+
+*📋 Available Services:*
+• IT Tickets (Freshservice)
+• User Management & Lookup
+• Device Management (Intune)
+• Asset Tracking
+• Change Management
+
+*🔒 Admin Commands:*
+• `@Systems admin add @user` - Grant admin access
+• `@Systems admin remove @user` - Revoke admin access
+• `@Systems help` - Show this message
 """
 
         # Add triage info if Gemini is enabled
         if Config.is_gemini_enabled() and Config.MONITORED_SLACK_CHANNEL_IDS:
             help_text += """
-*🤖 Automatic Triage:*
-In monitored channels, I automatically start troubleshooting new support requests without needing to @mention me.
+*🤖 Automatic Triage (Non-Admins):*
+In monitored channels, I automatically start troubleshooting new support requests without needing to @mention me. I'll ask questions to gather info, then help create a ticket if needed.
 """
-        
+
         self.slack.post_message(
             channel=cmd.channel_id,
             text=help_text

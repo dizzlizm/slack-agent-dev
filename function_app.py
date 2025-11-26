@@ -94,15 +94,13 @@ def initialize_app() -> None:
         
         _command_router = CommandRouter()
 
-        # Register specific commands (non-MCP)
+        # Register specific commands
         _command_router.register("help", _command_handlers.handle_help)
         _command_router.register("admin", _command_handlers.handle_admin)
-        _command_router.register("ask", _command_handlers.handle_ask)
-        _command_router.register("reset", _command_handlers.handle_reset)
 
         # Set default handler for ALL other commands → intelligent MCP routing
         # This means ANY @systems <query> will go to Gemini for intelligent routing
-        # No need to say "@systems fresh" or "@systems meraki" - just "@systems help me with X"
+        # No need for special commands like "ask" or "fresh" - just use natural language!
         if Config.is_gemini_enabled():
             _command_router.set_default_handler(_command_handlers.handle_smart)
             logging.info("✅ Intelligent MCP routing enabled - all unknown commands will be handled by AI")
@@ -265,7 +263,6 @@ def HealthCheck(req: func.HttpRequest) -> func.HttpResponse:
         health_status = {
             "status": "healthy",
             "integrations": {
-                "meraki": Config.is_meraki_enabled(),
                 "gemini": Config.is_gemini_enabled(),
                 "freshservice": Config.is_freshservice_enabled(),
                 "intune": Config.is_intune_enabled()

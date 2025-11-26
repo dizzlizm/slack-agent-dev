@@ -207,30 +207,6 @@ class GeminiMCPOrchestrator:
             )
         )
 
-        # === MERAKI TOOLS ===
-
-        update_ssid = types.FunctionDeclaration(
-            name="update_ssid_password",
-            description=(
-                "Update the WiFi password for an SSID across all Meraki networks. "
-                "Use this when users need to change WiFi passwords or update network security."
-            ),
-            parameters=types.Schema(
-                type=types.Type.OBJECT,
-                properties={
-                    "ssid_name": types.Schema(
-                        type=types.Type.STRING,
-                        description="The name of the WiFi network (SSID) to update."
-                    ),
-                    "new_password": types.Schema(
-                        type=types.Type.STRING,
-                        description="The new WiFi password (minimum 8 characters)."
-                    )
-                },
-                required=["ssid_name", "new_password"]
-            )
-        )
-
         # === INTUNE TOOLS ===
 
         reboot_device = types.FunctionDeclaration(
@@ -255,8 +231,6 @@ class GeminiMCPOrchestrator:
             # Freshservice (8 tools)
             get_user_email, get_user_name, list_tickets, list_assets, list_changes,
             get_ticket_by_id, get_asset_by_id, create_ticket,
-            # Meraki (1 tool)
-            update_ssid,
             # Intune (1 tool)
             reboot_device
         ])
@@ -277,35 +251,31 @@ class GeminiMCPOrchestrator:
         """
         # Build system instruction for intelligent routing
         system_instr = (
-            "You are an expert, intelligent IT Support Assistant. Your primary goal is to resolve the user's request using the available tools efficiently and accurately.\n"
-            "Access to multiple systems:\n"
-            "- Freshservice (Tickets & Assets): IT tickets, user info, assets, change requests.\n"
-            "- Meraki (Network): WiFi network management (update passwords).\n"
-            "- Intune (Device): Device management (remote reboot).\n\n"
+            "You are an intelligent IT Support Assistant with access to multiple systems:\n"
+            "- Freshservice: IT tickets, user info, assets, change requests\n"
+            "- Intune: Device management (remote reboot, device status)\n\n"
 
-            "Tool Use Priority & Logic\n"
-            "When a user asks a question, intelligently choose which tool(s) to use. Prioritize single, targeted tool calls over unnecessary lookups unless a user ID is required for a subsequent step.\n\n"
+            "## How to Handle User Queries\n"
+            "When a user asks a question, intelligently choose which tool(s) to use and chain them together:\n\n"
 
-            "I. Direct Access (Prefer These If Applicable):\n"
-            "- If the request involves a known Ticket ID or Asset ID, use get_ticket_by_id or get_asset_by_id immediately.\n"
-            "- If a device serial number is mentioned, use it directly with reboot_device.\n"
-            "- If a ticket creation is explicitly requested, use create_ticket.\n\n"
+            "**Looking up users:**\n"
+            "- If you see email addresses in the query (especially in [Mentioned users: ...] context), use get_user_by_email\n"
+            "- If you see names like 'John Smith' or 'Matt Abbott', use get_user_by_name\n"
+            "- The [Mentioned users: ...] section contains emails extracted from Slack @mentions - use these!\n\n"
 
-            "II. User Lookup Logic (Freshservice):\n"
-            "- Email First: If you see email addresses in the query (especially in [Mentioned users: ...] context) or need the current user's data, use get_user_by_email.\n"
-            "- Name Second: If only a name like 'John Smith' is present, use get_user_by_name (this returns a list; handle ambiguity/multiple matches).\n"
-            "- ALWAYS use the resulting numeric id from the lookup (or the context user's ID) as the user_id or requester_id for list_tickets or list_assets.\n\n"
+            "**Filtering results:**\n"
+            "- API tools return lists of items (tickets, assets, etc.)\n"
+            "- YOU CAN AND SHOULD FILTER THESE RESULTS based on user criteria\n"
+            "- Example: list_assets returns asset names like 'Lenovo ThinkPad T14' - filter for 'Lenovo' or 'laptop'\n"
+            "- Example: list_tickets returns ticket subjects - filter for keywords the user mentioned\n"
+            "- Don't say 'I cannot filter' - you absolutely can filter results after getting them!\n\n"
 
-            "III. Filtering Results (CRITICAL):\n"
-            "- The API tools return comprehensive lists. YOU MUST FILTER the raw tool results based on the user's criteria (e.g., ticket subject keywords, asset type, status).\n"
-            "- DO NOT state that you cannot filter. Filter the tool's JSON/list output before presenting the final response.\n\n"
+            "**Multi-step workflows:**\n"
+            "1. User asks about 'John's laptop' → call get_user_by_name → get user_id → call list_assets → filter for 'laptop'\n"
+            "2. User asks 'what tickets does jane@company.com have?' → call get_user_by_email → call list_tickets\n"
+            "3. User mentions asset type (Lenovo, Dell, iPhone) → get ALL assets first, then filter by name\n\n"
 
-            "IV. Multi-step Workflows (Examples):\n"
-            "1. 'Reboot John's laptop': get_user_by_name -> get user_id -> list_assets -> Filter for 'laptop' and extract serial_number -> reboot_device (if serial is available/found).\n"
-            "2. 'Open tickets for jane@company.com about email': get_user_by_email -> list_tickets -> Filter for 'email' or 'mail' in the subject/description.\n"
-            "3. 'What's the status of change 1234': list_recent_changes -> Filter for '1234' (since you don't have a direct change ID lookup).\n\n"
-
-            f"Current User Context (Use for 'my tickets/assets'):\n"
+            f"**Current user context:**\n"
             f"The requesting user's email is: {user_email if user_email else 'unknown'}\n"
             f"If you need to look up this user, use the email in this context with get_user_by_email.\n\n"
 
