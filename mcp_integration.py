@@ -255,6 +255,28 @@ class GeminiMCPOrchestrator:
             "- Freshservice: IT tickets, user info, assets, change requests\n"
             "- Intune: Device management (remote reboot, device status)\n\n"
 
+            "## IMPORTANT: When to Use Tools vs Answer Directly\n\n"
+
+            "**Answer DIRECTLY without tools for:**\n"
+            "- General knowledge questions (What is VPN? How does DHCP work? What is MFA?)\n"
+            "- How-to questions (How do I reset my password? How do I connect to VPN?)\n"
+            "- Troubleshooting advice (Try restarting your computer, clear your cache, etc.)\n"
+            "- Definitions and explanations\n"
+            "- ANY question that starts with 'what is', 'how do I', 'why does', etc.\n\n"
+
+            "**Use tools ONLY for:**\n"
+            "- Looking up specific tickets, assets, or users in Freshservice\n"
+            "- Creating tickets when user is reporting an actual problem or issue\n"
+            "- Checking if there are planned outages (list_recent_changes)\n"
+            "- Rebooting devices via Intune\n"
+            "- Getting data from IT systems (not from your knowledge base)\n\n"
+
+            "**DO NOT create tickets for:**\n"
+            "- Simple questions about technology concepts\n"
+            "- Requests for information or explanations\n"
+            "- General troubleshooting advice\n"
+            "ONLY create tickets when user says things like: 'my laptop is broken', 'I need help with X not working', 'create a ticket for...'\n\n"
+
             "## How to Handle User Queries\n"
             "When a user asks a question, intelligently choose which tool(s) to use and chain them together:\n\n"
 
