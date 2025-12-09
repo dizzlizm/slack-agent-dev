@@ -1,0 +1,14 @@
+{
+  "body": "{\"type\":\"event_callback\",\"event\":{\"type\":\"message\",\"user\":\"U123456\",\"channel\":\"C123456\",\"text\":\"Hello bot\",\"ts\":\"1234567890.123456\"}}",
+  "headers": {
+    "x-slack-request-timestamp": "1234567890",
+    "x-slack-signature": "v0=example-signature"
+  },
+  "httpMethod": "POST",
+  "isBase64Encoded": false,
+  "path": "/slack/events",
+  "requestContext": {
+    "httpMethod": "POST",
+    "path": "/slack/events"
+  }
+}

@@ -39,29 +39,20 @@ jobs:
         run: |
           pytest tests/ -v --tb=short
 
-  terraform-validate:
+  sam-validate:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Setup SAM CLI
+        uses: aws-actions/setup-sam@v2
         with:
-          terraform_version: "1.6.0"
+          use-installer: true
 
-      - name: Terraform Format Check
-        run: terraform fmt -check -recursive infra/
+      - name: Validate SAM template
+        run: sam validate --lint
 
-      - name: Terraform Validate - Dev
-        working-directory: infra/environments/dev
-        run: |
-          terraform init -backend=false
-          terraform validate
-
-      - name: Terraform Validate - Prod
-        working-directory: infra/environments/prod
-        run: |
-          terraform init -backend=false
-          terraform validate
+      - name: Build SAM application
+        run: sam build

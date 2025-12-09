@@ -1,7 +1,7 @@
 # Systems Bot Makefile
 # Common commands for development and deployment
 
-.PHONY: help install install-dev lint test package deploy-dev deploy-prod terraform-init terraform-plan clean
+.PHONY: help install install-dev lint test build deploy-dev deploy-prod validate clean
 
 # Default target
 help:
@@ -15,19 +15,16 @@ help:
 	@echo "  make test         - Run test suite"
 	@echo "  make test-cov     - Run tests with coverage report"
 	@echo ""
-	@echo "Packaging:"
-	@echo "  make package      - Create Lambda deployment package"
+	@echo "SAM (Serverless Application Model):"
+	@echo "  make validate     - Validate SAM template"
+	@echo "  make build        - Build SAM application"
+	@echo "  make deploy-dev   - Deploy to dev environment"
+	@echo "  make deploy-prod  - Deploy to prod environment"
+	@echo "  make logs-dev     - Tail logs for dev slack-events function"
+	@echo "  make local-api    - Start local API Gateway for testing"
+	@echo ""
+	@echo "Utilities:"
 	@echo "  make clean        - Remove build artifacts"
-	@echo ""
-	@echo "Terraform:"
-	@echo "  make tf-init-dev  - Initialize Terraform for dev"
-	@echo "  make tf-init-prod - Initialize Terraform for prod"
-	@echo "  make tf-plan-dev  - Plan dev infrastructure changes"
-	@echo "  make tf-plan-prod - Plan prod infrastructure changes"
-	@echo "  make tf-apply-dev - Apply dev infrastructure changes"
-	@echo "  make tf-fmt       - Format Terraform files"
-	@echo ""
-	@echo "Local Development:"
 	@echo "  make run-local    - Run bot locally (requires .env file)"
 	@echo ""
 
@@ -57,49 +54,47 @@ test:
 test-cov:
 	pytest tests/ -v --cov=src --cov-report=html --cov-report=term
 
-# Create Lambda deployment package
-package: clean
-	@echo "Creating Lambda deployment package..."
-	mkdir -p package
-	$(PIP) install -r requirements.txt -t package/
-	cd package && zip -r ../lambda.zip .
-	zip -g lambda.zip -r src/
-	@echo "Created lambda.zip"
+# Validate SAM template
+validate:
+	sam validate --lint
+
+# Build SAM application
+build:
+	sam build
+
+# Deploy to dev environment
+deploy-dev: build
+	sam deploy --config-env dev
+
+# Deploy to prod environment (requires confirmation)
+deploy-prod: build
+	sam deploy --config-env prod
+
+# Tail logs for dev slack-events function
+logs-dev:
+	sam logs -n SlackEventsFunction --stack-name systems-bot-dev --tail
+
+# Tail logs for prod slack-events function
+logs-prod:
+	sam logs -n SlackEventsFunction --stack-name systems-bot-prod --tail
+
+# Start local API Gateway for testing
+local-api: build
+	sam local start-api --env-vars env.json
+
+# Invoke function locally
+local-invoke: build
+	sam local invoke SlackEventsFunction --event events/slack-event.json
 
 # Clean build artifacts
 clean:
-	rm -rf package/
-	rm -f lambda.zip
+	rm -rf .aws-sam/
 	rm -rf .pytest_cache/
 	rm -rf htmlcov/
 	rm -rf .coverage
 	rm -rf __pycache__/
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
-
-# Terraform commands - Dev
-tf-init-dev:
-	cd infra/environments/dev && terraform init
-
-tf-plan-dev:
-	cd infra/environments/dev && terraform plan -var="lambda_s3_bucket=$(LAMBDA_S3_BUCKET)"
-
-tf-apply-dev:
-	cd infra/environments/dev && terraform apply -var="lambda_s3_bucket=$(LAMBDA_S3_BUCKET)"
-
-# Terraform commands - Prod
-tf-init-prod:
-	cd infra/environments/prod && terraform init
-
-tf-plan-prod:
-	cd infra/environments/prod && terraform plan -var="lambda_s3_bucket=$(LAMBDA_S3_BUCKET)"
-
-tf-apply-prod:
-	cd infra/environments/prod && terraform apply -var="lambda_s3_bucket=$(LAMBDA_S3_BUCKET)"
-
-# Format Terraform files
-tf-fmt:
-	terraform fmt -recursive infra/
 
 # Local development (requires .env file with configuration)
 run-local:
