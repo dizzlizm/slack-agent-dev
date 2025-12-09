@@ -2,7 +2,8 @@
 Authorization management for the Slack bot.
 """
 import logging
-from typing import Set
+import time
+from typing import Set, Optional
 from azure.data.tables import TableClient, TableEntity
 from azure.core.exceptions import ResourceNotFoundError, AzureError
 
@@ -10,43 +11,63 @@ from exceptions import AuthorizationError, StorageError
 
 
 class AuthorizationManager:
-    """Manages user authorization using Azure Table Storage."""
-    
+    """Manages user authorization using Azure Table Storage with TTL-based cache."""
+
+    # Cache TTL in seconds (5 minutes)
+    CACHE_TTL_SECONDS = 300
+
     def __init__(self, table_client: TableClient):
         self.table_client = table_client
         self._cache: Set[str] = set()
         self._cache_loaded = False
-        
-    def _load_cache(self) -> None:
-        """Load all authorized users into memory cache."""
-        if self._cache_loaded:
+        self._cache_timestamp: Optional[float] = None
+
+    def _is_cache_stale(self) -> bool:
+        """Check if the cache has expired and needs refresh."""
+        if not self._cache_loaded or self._cache_timestamp is None:
+            return True
+        return (time.time() - self._cache_timestamp) > self.CACHE_TTL_SECONDS
+
+    def _load_cache(self, force: bool = False) -> None:
+        """
+        Load all authorized users into memory cache.
+
+        Args:
+            force: If True, refresh cache even if not stale
+        """
+        if not force and self._cache_loaded and not self._is_cache_stale():
             return
-        
+
         try:
             entities = self.table_client.list_entities()
             self._cache = {entity.get("RowKey") for entity in entities}
             self._cache_loaded = True
-            logging.info(f"Loaded {len(self._cache)} authorized users into cache")
+            self._cache_timestamp = time.time()
+            logging.info(f"Loaded {len(self._cache)} authorized users into cache (TTL: {self.CACHE_TTL_SECONDS}s)")
         except AzureError as e:
             logging.error(f"Failed to load authorization cache: {e}")
-            # Continue with empty cache - will fall back to direct lookups
+            # Continue with existing cache if available, otherwise empty
     
     def is_authorized(self, user_id: str) -> bool:
         """
         Check if a user is authorized.
-        
+
         Args:
             user_id: The Slack user ID to check
-            
+
         Returns:
             True if the user is authorized, False otherwise
         """
+        # Refresh cache if stale (handles removed users)
+        if self._is_cache_stale():
+            self._load_cache(force=True)
+
         # Check cache first
         if self._cache_loaded and user_id in self._cache:
             logging.debug(f"Authorization check PASSED (cached) for user {user_id}")
             return True
-        
-        # Fall back to direct lookup
+
+        # Fall back to direct lookup (for users added after cache load)
         try:
             self.table_client.get_entity(partition_key="SlackUser", row_key=user_id)
             # Update cache
