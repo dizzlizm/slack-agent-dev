@@ -22,6 +22,11 @@ from interactive_handler import InteractiveHandler
 from triage_workflow import TriageWorkflow
 from exceptions import BotException
 from mcp_tools import get_freshservice_tools
+from security import (
+    get_request_verifier,
+    get_rate_limiter,
+    get_message_deduplicator
+)
 
 # =========================================================================
 # INITIALIZATION
@@ -142,20 +147,34 @@ def SlackEventsHandler(req: func.HttpRequest) -> func.HttpResponse:
     """
     Handle Slack event callbacks (DMs, mentions, messages).
     """
+    # Get raw body for signature verification (must be done before parsing JSON)
+    raw_body = req.get_body()
+
     try:
         req_body = req.get_json()
     except ValueError:
         logging.error("Invalid JSON in request body")
         return func.HttpResponse("Invalid JSON", status_code=400)
-    
-    # Handle URL verification challenge
+
+    # Handle URL verification challenge (before signature check - Slack requirement)
     if req_body.get('type') == 'url_verification':
         challenge = req_body.get('challenge', '')
         logging.info("Responding to Slack URL verification challenge")
         return func.HttpResponse(challenge, status_code=200, mimetype="text/plain")
-    
-    # Initialize app on first request
+
+    # Initialize app on first request (loads config including signing secret)
     initialize_app()
+
+    # SECURITY: Verify request signature from Slack
+    timestamp = req.headers.get('X-Slack-Request-Timestamp', '')
+    signature = req.headers.get('X-Slack-Signature', '')
+
+    verifier = get_request_verifier()
+    is_valid, error_msg = verifier.verify_request(raw_body, timestamp, signature)
+
+    if not is_valid:
+        logging.warning(f"Slack signature verification failed: {error_msg}")
+        return func.HttpResponse("Unauthorized", status_code=401)
     
     # Handle event callbacks
     if req_body.get('type') == 'event_callback':
@@ -191,24 +210,22 @@ def SlackEventsHandler(req: func.HttpRequest) -> func.HttpResponse:
         if not text or not user_id:
             logging.debug("Ignoring message with no text or user_id")
             return func.HttpResponse(status_code=200)
-        
-        # Deduplicate: Check if we've seen this exact message recently
-        # (Slack sometimes sends duplicate events during retries)
-        message_key = f"{channel_id}-{message_ts}"
-        if not hasattr(SlackEventsHandler, '_recent_messages'):
-            SlackEventsHandler._recent_messages = set()
 
-        if message_key in SlackEventsHandler._recent_messages:
-            logging.warning(f"Duplicate event detected: {message_key}, ignoring")
+        # SECURITY: Check rate limit for this user
+        rate_limiter = get_rate_limiter()
+        is_allowed, retry_after = rate_limiter.is_allowed(user_id)
+
+        if not is_allowed:
+            logging.warning(f"Rate limit exceeded for user {user_id}, retry after {retry_after}s")
+            # Don't respond to avoid revealing rate limiting to potential attackers
+            # But do return 200 to prevent Slack retries
             return func.HttpResponse(status_code=200)
 
-        SlackEventsHandler._recent_messages.add(message_key)
+        # Deduplicate using TTLCache (thread-safe, auto-expiring)
+        deduplicator = get_message_deduplicator()
+        if deduplicator.is_duplicate(channel_id, message_ts):
+            return func.HttpResponse(status_code=200)
 
-        # Keep only last 1000 message keys to prevent memory leak
-        if len(SlackEventsHandler._recent_messages) > 1000:
-            # Remove oldest entries (convert to list, slice, convert back)
-            SlackEventsHandler._recent_messages = set(list(SlackEventsHandler._recent_messages)[-1000:])
-        
         logging.info(f"[{user_id}] Message in {channel_id}: {text[:50]}...")
 
         # Process in background thread to avoid Slack 3-second timeout
@@ -228,25 +245,39 @@ def SlackInteractiveHandler(req: func.HttpRequest) -> func.HttpResponse:
     """
     Handle Slack interactive component callbacks (button clicks).
     """
+    # Get raw body for signature verification
+    raw_body = req.get_body()
+
     try:
         payload_str = req.form.get('payload')
         if not payload_str:
             logging.error("No payload in interactive request")
             return func.HttpResponse("Missing payload", status_code=400)
-        
-        # Initialize app on first request
+
+        # Initialize app on first request (loads config including signing secret)
         initialize_app()
-        
+
+        # SECURITY: Verify request signature from Slack
+        timestamp = req.headers.get('X-Slack-Request-Timestamp', '')
+        signature = req.headers.get('X-Slack-Signature', '')
+
+        verifier = get_request_verifier()
+        is_valid, error_msg = verifier.verify_request(raw_body, timestamp, signature)
+
+        if not is_valid:
+            logging.warning(f"Interactive signature verification failed: {error_msg}")
+            return func.HttpResponse("Unauthorized", status_code=401)
+
         # Process in background thread to avoid 3-second timeout
         thread = threading.Thread(
             target=_process_interactive_payload,
             args=(payload_str,)
         )
         thread.start()
-        
+
         # Immediately return 200 OK to Slack
         return func.HttpResponse(status_code=200)
-        
+
     except Exception as e:
         logging.error(f"Error in interactive handler: {e}", exc_info=True)
         return func.HttpResponse(status_code=500)
@@ -437,9 +468,10 @@ def _handle_command(
         )
     except Exception as e:
         logging.error(f"Unexpected error in command {parsed_command.command}: {e}", exc_info=True)
+        # Don't leak internal error details to users
         _slack_client.post_message(
             channel=channel_id,
-            text=f"❌ An unexpected error occurred: {e}",
+            text="❌ An unexpected error occurred. Please try again or contact IT support if the issue persists.",
             thread_ts=thread_ts
         )
 

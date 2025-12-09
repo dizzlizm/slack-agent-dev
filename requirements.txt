@@ -21,3 +21,6 @@ requests>=2.31.0
 
 # Type hints support (if using Python <3.10)
 typing-extensions>=4.8.0
+
+# Caching utilities (for rate limiting and deduplication)
+cachetools>=5.3.0

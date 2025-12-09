@@ -10,6 +10,7 @@ from typing import Optional, Dict, List, Any
 import requests
 
 from config import Config
+from security import InputSanitizer
 
 
 def retry_on_failure(max_retries=3, backoff_factor=1.0):
@@ -169,12 +170,20 @@ class FreshserviceTools:
         if not first_name and not last_name:
             raise ValueError("Must provide at least first_name or last_name")
 
-        # Build search query
+        # SECURITY: Sanitize inputs to prevent query injection
+        sanitized_first = InputSanitizer.sanitize_freshservice_query(first_name) if first_name else None
+        sanitized_last = InputSanitizer.sanitize_freshservice_query(last_name) if last_name else None
+
+        # Re-check after sanitization
+        if not sanitized_first and not sanitized_last:
+            raise ValueError("Invalid name input after sanitization")
+
+        # Build search query with sanitized values
         query_parts = []
-        if first_name:
-            query_parts.append(f"first_name:'{first_name}'")
-        if last_name:
-            query_parts.append(f"last_name:'{last_name}'")
+        if sanitized_first:
+            query_parts.append(f"first_name:'{sanitized_first}'")
+        if sanitized_last:
+            query_parts.append(f"last_name:'{sanitized_last}'")
 
         query = " AND ".join(query_parts)
         encoded_query = urllib.parse.quote(query)

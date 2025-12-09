@@ -14,11 +14,17 @@ class ConfigurationError(Exception):
 
 class Config:
     """Centralized configuration management."""
-    
+
     # Slack Configuration
     SLACK_BOT_TOKEN: str
     SLACK_BOT_USER_ID: str
+    SLACK_SIGNING_SECRET: str  # Required for request verification
     MONITORED_SLACK_CHANNEL_IDS: List[str]
+
+    # Security Settings
+    RATE_LIMIT_REQUESTS: int = 10  # Max requests per user per window
+    RATE_LIMIT_WINDOW_SECONDS: int = 60  # Window size in seconds
+    MESSAGE_DEDUP_TTL_SECONDS: int = 300  # 5 minutes for message deduplication
     
     # Azure Configuration
     AZURE_STORAGE_CONNECTION_STRING: str
@@ -67,7 +73,11 @@ class Config:
         cls.SLACK_BOT_USER_ID = os.environ.get("SLACK_BOT_USER_ID", "")
         if not cls.SLACK_BOT_USER_ID:
             errors.append("SLACK_BOT_USER_ID is required")
-        
+
+        cls.SLACK_SIGNING_SECRET = os.environ.get("SLACK_SIGNING_SECRET", "")
+        if not cls.SLACK_SIGNING_SECRET:
+            errors.append("SLACK_SIGNING_SECRET is required for request verification")
+
         # Parse monitored channels
         monitored_channels_str = os.environ.get("MONITORED_SLACK_CHANNEL_IDS", "")
         cls.MONITORED_SLACK_CHANNEL_IDS = [

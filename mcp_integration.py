@@ -213,7 +213,9 @@ class GeminiMCPOrchestrator:
             name="reboot_device",
             description=(
                 "Send a remote reboot command to a device via Intune. "
-                "Use this when a device needs to be restarted remotely for troubleshooting."
+                "IMPORTANT: This is a DESTRUCTIVE action that will interrupt the user. "
+                "You must set confirmed=true ONLY if the user has explicitly confirmed the reboot. "
+                "If confirmed is false or not provided, return a warning and ask for confirmation."
             ),
             parameters=types.Schema(
                 type=types.Type.OBJECT,
@@ -221,6 +223,10 @@ class GeminiMCPOrchestrator:
                     "serial_number": types.Schema(
                         type=types.Type.STRING,
                         description="The device serial number to reboot."
+                    ),
+                    "confirmed": types.Schema(
+                        type=types.Type.BOOLEAN,
+                        description="Set to true ONLY if user explicitly confirmed the reboot action. Default is false."
                     )
                 },
                 required=["serial_number"]
@@ -268,8 +274,15 @@ class GeminiMCPOrchestrator:
             "- Looking up specific tickets, assets, or users in Freshservice\n"
             "- Creating tickets when user is reporting an actual problem or issue\n"
             "- Checking if there are planned outages (list_recent_changes)\n"
-            "- Rebooting devices via Intune\n"
+            "- Rebooting devices via Intune (REQUIRES explicit user confirmation - see below)\n"
             "- Getting data from IT systems (not from your knowledge base)\n\n"
+
+            "**CRITICAL - Device Reboot Safety:**\n"
+            "- Rebooting a device is DISRUPTIVE and will interrupt the user's work\n"
+            "- NEVER call reboot_device with confirmed=true unless the user has explicitly said 'yes', 'confirm', 'go ahead', or similar\n"
+            "- First call reboot_device with confirmed=false to get a warning message\n"
+            "- Present the warning to the user and ask them to confirm\n"
+            "- Only after explicit confirmation, call reboot_device with confirmed=true\n\n"
 
             "**DO NOT create tickets for:**\n"
             "- Simple questions about technology concepts\n"
@@ -396,8 +409,37 @@ class GeminiMCPOrchestrator:
             The tool result (could be dict, list, etc.)
         """
         try:
-            # Call the tool directly using our UnifiedTools instance
-            # It will automatically route to the correct backend (Freshservice/Meraki/Intune)
+            # SECURITY: Intercept reboot_device and require explicit confirmation
+            if tool_name == "reboot_device":
+                confirmed = args.get("confirmed", False)
+                serial_number = args.get("serial_number", "unknown")
+
+                if not confirmed:
+                    # Return a warning instead of executing
+                    logging.info(f"Reboot request for {serial_number} - awaiting confirmation")
+                    return {
+                        "status": "confirmation_required",
+                        "message": (
+                            f"⚠️ **Reboot Confirmation Required**\n\n"
+                            f"You are about to reboot device with serial number: **{serial_number}**\n\n"
+                            f"This action will:\n"
+                            f"• Immediately restart the device\n"
+                            f"• Interrupt any work in progress\n"
+                            f"• Disconnect the user from all applications\n\n"
+                            f"Please reply with **'yes, reboot'** or **'confirm reboot'** to proceed, "
+                            f"or **'cancel'** to abort."
+                        ),
+                        "serial_number": serial_number
+                    }
+
+                # User confirmed - remove 'confirmed' arg before passing to actual tool
+                exec_args = {"serial_number": serial_number}
+                logging.info(f"Reboot CONFIRMED for device {serial_number} - executing")
+                result = self.unified_tools.execute_tool(tool_name, exec_args)
+                logging.info(f"Tool {tool_name} executed successfully")
+                return result
+
+            # All other tools - execute directly
             result = self.unified_tools.execute_tool(tool_name, args)
             logging.info(f"Tool {tool_name} executed successfully")
             return result
