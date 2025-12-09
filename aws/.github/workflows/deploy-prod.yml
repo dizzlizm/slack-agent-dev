@@ -1,0 +1,70 @@
+name: Deploy to Production
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:  # Allow manual trigger with approval
+
+env:
+  AWS_REGION: us-east-1
+  ENVIRONMENT: prod
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production  # Requires approval in GitHub settings
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup SAM CLI
+        uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      - name: Build SAM application
+        run: sam build
+
+      - name: Deploy to Production
+        run: |
+          sam deploy \
+            --stack-name systems-bot-prod \
+            --parameter-overrides Environment=prod LogRetentionDays=30 \
+            --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --resolve-s3
+
+      - name: Output Deployment Info
+        run: |
+          echo "## Production Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ github.event.release.tag_name || 'manual' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Get stack outputs
+          OUTPUTS=$(aws cloudformation describe-stacks \
+            --stack-name systems-bot-prod \
+            --query 'Stacks[0].Outputs' \
+            --output json)
+
+          echo "**Slack Events URL:** $(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="SlackEventsUrl") | .OutputValue')" >> $GITHUB_STEP_SUMMARY
+          echo "**Slack Interactive URL:** $(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="SlackInteractiveUrl") | .OutputValue')" >> $GITHUB_STEP_SUMMARY
+          echo "**Health URL:** $(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="HealthUrl") | .OutputValue')" >> $GITHUB_STEP_SUMMARY

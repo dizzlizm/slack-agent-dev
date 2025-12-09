@@ -1,0 +1,284 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Systems Bot - AI-powered IT Support Assistant
+
+# ============================================================================
+# PARAMETERS
+# ============================================================================
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Deployment environment
+
+  LogRetentionDays:
+    Type: Number
+    Default: 7
+    Description: CloudWatch log retention in days
+
+# ============================================================================
+# GLOBALS
+# ============================================================================
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 30
+    MemorySize: 256
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        USE_AWS_SECRETS: "true"
+        AWS_REGION_NAME: !Ref AWS::Region
+    Tags:
+      Project: systems-bot
+      Environment: !Ref Environment
+
+# ============================================================================
+# RESOURCES
+# ============================================================================
+Resources:
+
+  # --------------------------------------------------------------------------
+  # SECRETS MANAGER
+  # --------------------------------------------------------------------------
+  BotSecrets:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "systems-bot/${Environment}"
+      Description: !Sub "Secrets for Systems Bot - ${Environment}"
+      Tags:
+        - Key: Project
+          Value: systems-bot
+        - Key: Environment
+          Value: !Ref Environment
+
+  # --------------------------------------------------------------------------
+  # DYNAMODB TABLES
+  # --------------------------------------------------------------------------
+  AuthorizedUsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${Environment}-AuthorizedUsers"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      Tags:
+        - Key: Project
+          Value: systems-bot
+        - Key: Environment
+          Value: !Ref Environment
+
+  ConversationHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${Environment}-ConversationHistory"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: TTL
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: systems-bot
+        - Key: Environment
+          Value: !Ref Environment
+
+  TriageSessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${Environment}-TriageSessions"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: OriginalUserID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: UserIndex
+          KeySchema:
+            - AttributeName: OriginalUserID
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: TTL
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: systems-bot
+        - Key: Environment
+          Value: !Ref Environment
+
+  # --------------------------------------------------------------------------
+  # LAMBDA FUNCTIONS
+  # --------------------------------------------------------------------------
+  SlackEventsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-slack-events"
+      Handler: src.handlers.slack_events.lambda_handler
+      Description: Handles Slack event callbacks
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AuthorizedUsersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConversationHistoryTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TriageSessionsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref BotSecrets
+      Events:
+        SlackEvents:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /slack/events
+            Method: POST
+
+  SlackInteractiveFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-slack-interactive"
+      Handler: src.handlers.slack_interactive.lambda_handler
+      Description: Handles Slack interactive callbacks (buttons)
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AuthorizedUsersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConversationHistoryTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TriageSessionsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref BotSecrets
+      Events:
+        SlackInteractive:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /slack/interactive
+            Method: POST
+
+  HealthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-health"
+      Handler: src.handlers.health.lambda_handler
+      Description: Health check endpoint
+      Timeout: 10
+      MemorySize: 128
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref BotSecrets
+      Events:
+        Health:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /health
+            Method: GET
+
+  # --------------------------------------------------------------------------
+  # API GATEWAY
+  # --------------------------------------------------------------------------
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "${Environment}-systems-bot-api"
+      StageName: !Ref Environment
+      Description: !Sub "Systems Bot API - ${Environment}"
+      Tags:
+        Project: systems-bot
+        Environment: !Ref Environment
+
+  # --------------------------------------------------------------------------
+  # CLOUDWATCH LOG GROUPS
+  # --------------------------------------------------------------------------
+  SlackEventsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${Environment}-slack-events"
+      RetentionInDays: !Ref LogRetentionDays
+
+  SlackInteractiveLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${Environment}-slack-interactive"
+      RetentionInDays: !Ref LogRetentionDays
+
+  HealthLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${Environment}-health"
+      RetentionInDays: !Ref LogRetentionDays
+
+# ============================================================================
+# OUTPUTS
+# ============================================================================
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+
+  SlackEventsUrl:
+    Description: Slack Events webhook URL
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/slack/events"
+
+  SlackInteractiveUrl:
+    Description: Slack Interactive webhook URL
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/slack/interactive"
+
+  HealthUrl:
+    Description: Health check URL
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/health"
+
+  SecretArn:
+    Description: ARN of the Secrets Manager secret
+    Value: !Ref BotSecrets
+
+  AuthorizedUsersTableName:
+    Description: DynamoDB table for authorized users
+    Value: !Ref AuthorizedUsersTable
+
+  ConversationHistoryTableName:
+    Description: DynamoDB table for conversation history
+    Value: !Ref ConversationHistoryTable
+
+  TriageSessionsTableName:
+    Description: DynamoDB table for triage sessions
+    Value: !Ref TriageSessionsTable

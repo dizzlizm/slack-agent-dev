@@ -1,0 +1,43 @@
+# SAM Configuration File
+# This file stores deployment configurations for different environments.
+# Use: sam deploy --config-env <environment>
+
+version = 0.1
+
+# ============================================================================
+# DEV ENVIRONMENT
+# ============================================================================
+[dev.deploy.parameters]
+stack_name = "systems-bot-dev"
+resolve_s3 = true
+s3_prefix = "systems-bot-dev"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=dev LogRetentionDays=7"
+tags = "Project=systems-bot Environment=dev"
+
+# ============================================================================
+# PROD ENVIRONMENT
+# ============================================================================
+[prod.deploy.parameters]
+stack_name = "systems-bot-prod"
+resolve_s3 = true
+s3_prefix = "systems-bot-prod"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=prod LogRetentionDays=30"
+tags = "Project=systems-bot Environment=prod"
+
+# ============================================================================
+# DEFAULT (used when no config-env specified)
+# ============================================================================
+[default.deploy.parameters]
+stack_name = "systems-bot-dev"
+resolve_s3 = true
+s3_prefix = "systems-bot"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=dev"
