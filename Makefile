@@ -58,9 +58,9 @@ test-cov:
 validate:
 	sam validate --lint
 
-# Build SAM application
+# Build SAM application (uses Docker for Linux compatibility)
 build:
-	sam build
+	sam build --use-container
 
 # Deploy to dev environment
 deploy-dev: build

@@ -40,7 +40,7 @@ jobs:
           use-installer: true
 
       - name: Build SAM application
-        run: sam build
+        run: sam build --use-container
 
       - name: Deploy to Production
         run: |
