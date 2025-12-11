@@ -1,6 +1,9 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Systems Bot - AI-powered IT Support Assistant
+Description: >-
+  Systems Bot - AI-powered Slack bot for IT support and triage.
+  Provides intelligent troubleshooting assistance, automated ticket routing,
+  and conversation history management for IT support teams.
 
 # ============================================================================
 # PARAMETERS
@@ -12,12 +15,12 @@ Parameters:
     AllowedValues:
       - dev
       - prod
-    Description: Deployment environment
+    Description: Deployment environment (dev for development/testing, prod for production)
 
   LogRetentionDays:
     Type: Number
     Default: 7
-    Description: CloudWatch log retention in days
+    Description: Number of days to retain CloudWatch logs before automatic deletion
 
 # ============================================================================
 # GLOBALS
@@ -33,8 +36,11 @@ Globals:
         USE_AWS_SECRETS: "true"
         AWS_REGION_NAME: !Ref AWS::Region
     Tags:
+      Application: systems-bot
       Project: systems-bot
       Environment: !Ref Environment
+      ManagedBy: aws-sam
+      Component: lambda
 
 # ============================================================================
 # RESOURCES
@@ -48,18 +54,28 @@ Resources:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: !Sub "systems-bot/${Environment}"
-      Description: !Sub "Secrets for Systems Bot - ${Environment}"
+      Description: !Sub >-
+        Credentials and API keys for Systems Bot (${Environment}).
+        Contains Slack tokens, Anthropic API key, and other sensitive configuration.
       Tags:
+        - Key: Application
+          Value: systems-bot
         - Key: Project
           Value: systems-bot
         - Key: Environment
           Value: !Ref Environment
+        - Key: ManagedBy
+          Value: aws-sam
+        - Key: Component
+          Value: secrets
 
   # --------------------------------------------------------------------------
   # DYNAMODB TABLES
   # --------------------------------------------------------------------------
   AuthorizedUsersTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Sub "${Environment}-AuthorizedUsers"
       BillingMode: PAY_PER_REQUEST
@@ -74,13 +90,23 @@ Resources:
         - AttributeName: SK
           KeyType: RANGE
       Tags:
+        - Key: Application
+          Value: systems-bot
         - Key: Project
           Value: systems-bot
         - Key: Environment
           Value: !Ref Environment
+        - Key: ManagedBy
+          Value: aws-sam
+        - Key: Component
+          Value: database
+        - Key: Description
+          Value: Stores authorized users and their permissions for bot access control
 
   ConversationHistoryTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Sub "${Environment}-ConversationHistory"
       BillingMode: PAY_PER_REQUEST
@@ -98,13 +124,23 @@ Resources:
         AttributeName: TTL
         Enabled: true
       Tags:
+        - Key: Application
+          Value: systems-bot
         - Key: Project
           Value: systems-bot
         - Key: Environment
           Value: !Ref Environment
+        - Key: ManagedBy
+          Value: aws-sam
+        - Key: Component
+          Value: database
+        - Key: Description
+          Value: Stores chat message history for context-aware AI conversations
 
   TriageSessionsTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Sub "${Environment}-TriageSessions"
       BillingMode: PAY_PER_REQUEST
@@ -131,10 +167,18 @@ Resources:
         AttributeName: TTL
         Enabled: true
       Tags:
+        - Key: Application
+          Value: systems-bot
         - Key: Project
           Value: systems-bot
         - Key: Environment
           Value: !Ref Environment
+        - Key: ManagedBy
+          Value: aws-sam
+        - Key: Component
+          Value: database
+        - Key: Description
+          Value: Tracks IT support triage sessions and ticket escalation workflows
 
   # --------------------------------------------------------------------------
   # LAMBDA FUNCTIONS
@@ -144,7 +188,9 @@ Resources:
     Properties:
       FunctionName: !Sub "${Environment}-slack-events"
       Handler: src.handlers.slack_events.lambda_handler
-      Description: Handles Slack event callbacks
+      Description: !Sub >-
+        Processes Slack Events API webhooks including messages, app mentions,
+        and channel events. Routes to AI for intelligent response generation (${Environment}).
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref AuthorizedUsersTable
@@ -170,7 +216,9 @@ Resources:
     Properties:
       FunctionName: !Sub "${Environment}-slack-interactive"
       Handler: src.handlers.slack_interactive.lambda_handler
-      Description: Handles Slack interactive callbacks (buttons)
+      Description: !Sub >-
+        Handles Slack interactive components including button clicks, modal submissions,
+        and shortcut invocations for triage workflow actions (${Environment}).
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref AuthorizedUsersTable
@@ -196,7 +244,9 @@ Resources:
     Properties:
       FunctionName: !Sub "${Environment}-health"
       Handler: src.handlers.health.lambda_handler
-      Description: Health check endpoint
+      Description: !Sub >-
+        Health check endpoint for monitoring and load balancer probes.
+        Validates connectivity to dependent services (${Environment}).
       Timeout: 10
       MemorySize: 128
       Policies:
@@ -221,10 +271,15 @@ Resources:
     Properties:
       Name: !Sub "${Environment}-systems-bot-api"
       StageName: !Ref Environment
-      Description: !Sub "Systems Bot API - ${Environment}"
+      Description: !Sub >-
+        REST API for Systems Bot Slack integration (${Environment}).
+        Exposes webhook endpoints for Slack events, interactive callbacks, and health monitoring.
       Tags:
+        Application: systems-bot
         Project: systems-bot
         Environment: !Ref Environment
+        ManagedBy: aws-sam
+        Component: api
 
   # --------------------------------------------------------------------------
   # CLOUDWATCH LOG GROUPS
@@ -234,18 +289,57 @@ Resources:
     Properties:
       LogGroupName: !Sub "/aws/lambda/${Environment}-slack-events"
       RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: Application
+          Value: systems-bot
+        - Key: Project
+          Value: systems-bot
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: aws-sam
+        - Key: Component
+          Value: logging
+        - Key: Function
+          Value: slack-events
 
   SlackInteractiveLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/${Environment}-slack-interactive"
       RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: Application
+          Value: systems-bot
+        - Key: Project
+          Value: systems-bot
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: aws-sam
+        - Key: Component
+          Value: logging
+        - Key: Function
+          Value: slack-interactive
 
   HealthLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/${Environment}-health"
       RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: Application
+          Value: systems-bot
+        - Key: Project
+          Value: systems-bot
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: aws-sam
+        - Key: Component
+          Value: logging
+        - Key: Function
+          Value: health
 
 # ============================================================================
 # OUTPUTS
