@@ -1,6 +1,9 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Systems Bot - AI-powered IT Support Assistant
+Description: >-
+  Systems Bot - AI-powered Slack bot for IT support and triage.
+  Provides intelligent troubleshooting assistance, automated ticket routing,
+  and conversation history management for IT support teams.
 
 # ============================================================================
 # PARAMETERS
@@ -12,12 +15,12 @@ Parameters:
     AllowedValues:
       - dev
       - prod
-    Description: Deployment environment
+    Description: Deployment environment (dev for development/testing, prod for production)
 
   LogRetentionDays:
     Type: Number
     Default: 7
-    Description: CloudWatch log retention in days
+    Description: Number of days to retain CloudWatch logs before automatic deletion
 
 # ============================================================================
 # GLOBALS
@@ -27,14 +30,18 @@ Globals:
     Runtime: python3.12
     Timeout: 30
     MemorySize: 256
+    Tracing: Active
     Environment:
       Variables:
         ENVIRONMENT: !Ref Environment
         USE_AWS_SECRETS: "true"
         AWS_REGION_NAME: !Ref AWS::Region
     Tags:
+      Application: systems-bot
       Project: systems-bot
       Environment: !Ref Environment
+      ManagedBy: aws-sam
+      Component: lambda
 
 # ============================================================================
 # RESOURCES
@@ -48,18 +55,50 @@ Resources:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: !Sub "systems-bot/${Environment}"
-      Description: !Sub "Secrets for Systems Bot - ${Environment}"
+      Description: !Sub >-
+        Credentials and API keys for Systems Bot (${Environment}).
+        Contains Slack tokens, Anthropic API key, and other sensitive configuration.
       Tags:
+        - Key: Application
+          Value: systems-bot
         - Key: Project
           Value: systems-bot
         - Key: Environment
           Value: !Ref Environment
+        - Key: ManagedBy
+          Value: aws-sam
+        - Key: Component
+          Value: secrets
+
+  # --------------------------------------------------------------------------
+  # DEAD LETTER QUEUE
+  # --------------------------------------------------------------------------
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${Environment}-systems-bot-dlq"
+      MessageRetentionPeriod: 1209600  # 14 days
+      Tags:
+        - Key: Application
+          Value: systems-bot
+        - Key: Project
+          Value: systems-bot
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: aws-sam
+        - Key: Component
+          Value: messaging
+        - Key: Description
+          Value: Dead letter queue for failed Lambda invocations
 
   # --------------------------------------------------------------------------
   # DYNAMODB TABLES
   # --------------------------------------------------------------------------
   AuthorizedUsersTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Sub "${Environment}-AuthorizedUsers"
       BillingMode: PAY_PER_REQUEST
@@ -73,14 +112,26 @@ Resources:
           KeyType: HASH
         - AttributeName: SK
           KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
       Tags:
+        - Key: Application
+          Value: systems-bot
         - Key: Project
           Value: systems-bot
         - Key: Environment
           Value: !Ref Environment
+        - Key: ManagedBy
+          Value: aws-sam
+        - Key: Component
+          Value: database
+        - Key: Description
+          Value: Stores authorized users and their permissions for bot access control
 
   ConversationHistoryTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Sub "${Environment}-ConversationHistory"
       BillingMode: PAY_PER_REQUEST
@@ -94,17 +145,29 @@ Resources:
           KeyType: HASH
         - AttributeName: SK
           KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
       TimeToLiveSpecification:
         AttributeName: TTL
         Enabled: true
       Tags:
+        - Key: Application
+          Value: systems-bot
         - Key: Project
           Value: systems-bot
         - Key: Environment
           Value: !Ref Environment
+        - Key: ManagedBy
+          Value: aws-sam
+        - Key: Component
+          Value: database
+        - Key: Description
+          Value: Stores chat message history for context-aware AI conversations
 
   TriageSessionsTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Sub "${Environment}-TriageSessions"
       BillingMode: PAY_PER_REQUEST
@@ -127,14 +190,24 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
       TimeToLiveSpecification:
         AttributeName: TTL
         Enabled: true
       Tags:
+        - Key: Application
+          Value: systems-bot
         - Key: Project
           Value: systems-bot
         - Key: Environment
           Value: !Ref Environment
+        - Key: ManagedBy
+          Value: aws-sam
+        - Key: Component
+          Value: database
+        - Key: Description
+          Value: Tracks IT support triage sessions and ticket escalation workflows
 
   # --------------------------------------------------------------------------
   # LAMBDA FUNCTIONS
@@ -144,7 +217,12 @@ Resources:
     Properties:
       FunctionName: !Sub "${Environment}-slack-events"
       Handler: src.handlers.slack_events.lambda_handler
-      Description: Handles Slack event callbacks
+      Description: !Sub >-
+        Processes Slack Events API webhooks including messages, app mentions,
+        and channel events. Routes to AI for intelligent response generation (${Environment}).
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt DeadLetterQueue.Arn
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref AuthorizedUsersTable
@@ -152,6 +230,8 @@ Resources:
             TableName: !Ref ConversationHistoryTable
         - DynamoDBCrudPolicy:
             TableName: !Ref TriageSessionsTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt DeadLetterQueue.QueueName
         - Statement:
             - Effect: Allow
               Action:
@@ -170,7 +250,12 @@ Resources:
     Properties:
       FunctionName: !Sub "${Environment}-slack-interactive"
       Handler: src.handlers.slack_interactive.lambda_handler
-      Description: Handles Slack interactive callbacks (buttons)
+      Description: !Sub >-
+        Handles Slack interactive components including button clicks, modal submissions,
+        and shortcut invocations for triage workflow actions (${Environment}).
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt DeadLetterQueue.Arn
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref AuthorizedUsersTable
@@ -178,6 +263,8 @@ Resources:
             TableName: !Ref ConversationHistoryTable
         - DynamoDBCrudPolicy:
             TableName: !Ref TriageSessionsTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt DeadLetterQueue.QueueName
         - Statement:
             - Effect: Allow
               Action:
@@ -196,10 +283,17 @@ Resources:
     Properties:
       FunctionName: !Sub "${Environment}-health"
       Handler: src.handlers.health.lambda_handler
-      Description: Health check endpoint
+      Description: !Sub >-
+        Health check endpoint for monitoring and load balancer probes.
+        Validates connectivity to dependent services (${Environment}).
       Timeout: 10
       MemorySize: 128
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt DeadLetterQueue.Arn
       Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt DeadLetterQueue.QueueName
         - Statement:
             - Effect: Allow
               Action:
@@ -221,10 +315,24 @@ Resources:
     Properties:
       Name: !Sub "${Environment}-systems-bot-api"
       StageName: !Ref Environment
-      Description: !Sub "Systems Bot API - ${Environment}"
+      Description: !Sub >-
+        REST API for Systems Bot Slack integration (${Environment}).
+        Exposes webhook endpoints for Slack events, interactive callbacks, and health monitoring.
+      TracingEnabled: true
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          ThrottlingBurstLimit: 100
+          ThrottlingRateLimit: 50
+          LoggingLevel: ERROR
+          DataTraceEnabled: false
+          MetricsEnabled: true
       Tags:
+        Application: systems-bot
         Project: systems-bot
         Environment: !Ref Environment
+        ManagedBy: aws-sam
+        Component: api
 
   # --------------------------------------------------------------------------
   # CLOUDWATCH LOG GROUPS
@@ -234,18 +342,128 @@ Resources:
     Properties:
       LogGroupName: !Sub "/aws/lambda/${Environment}-slack-events"
       RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: Application
+          Value: systems-bot
+        - Key: Project
+          Value: systems-bot
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: aws-sam
+        - Key: Component
+          Value: logging
+        - Key: Function
+          Value: slack-events
 
   SlackInteractiveLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/${Environment}-slack-interactive"
       RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: Application
+          Value: systems-bot
+        - Key: Project
+          Value: systems-bot
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: aws-sam
+        - Key: Component
+          Value: logging
+        - Key: Function
+          Value: slack-interactive
 
   HealthLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/${Environment}-health"
       RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: Application
+          Value: systems-bot
+        - Key: Project
+          Value: systems-bot
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: aws-sam
+        - Key: Component
+          Value: logging
+        - Key: Function
+          Value: health
+
+  # --------------------------------------------------------------------------
+  # CLOUDWATCH ALARMS
+  # --------------------------------------------------------------------------
+  SlackEventsErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-slack-events-errors"
+      AlarmDescription: !Sub "Alarm when ${Environment}-slack-events Lambda errors exceed threshold"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SlackEventsFunction
+      TreatMissingData: notBreaching
+
+  SlackInteractiveErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-slack-interactive-errors"
+      AlarmDescription: !Sub "Alarm when ${Environment}-slack-interactive Lambda errors exceed threshold"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SlackInteractiveFunction
+      TreatMissingData: notBreaching
+
+  ApiGateway5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-api-gateway-5xx-errors"
+      AlarmDescription: !Sub "Alarm when API Gateway 5xx errors exceed threshold (${Environment})"
+      MetricName: 5XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Sub "${Environment}-systems-bot-api"
+      TreatMissingData: notBreaching
+
+  DeadLetterQueueAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-dlq-messages"
+      AlarmDescription: !Sub "Alarm when messages appear in dead letter queue (${Environment})"
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt DeadLetterQueue.QueueName
+      TreatMissingData: notBreaching
 
 # ============================================================================
 # OUTPUTS
@@ -282,3 +500,11 @@ Outputs:
   TriageSessionsTableName:
     Description: DynamoDB table for triage sessions
     Value: !Ref TriageSessionsTable
+
+  DeadLetterQueueUrl:
+    Description: URL of the dead letter queue for failed Lambda invocations
+    Value: !Ref DeadLetterQueue
+
+  DeadLetterQueueArn:
+    Description: ARN of the dead letter queue
+    Value: !GetAtt DeadLetterQueue.Arn

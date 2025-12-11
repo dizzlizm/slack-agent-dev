@@ -98,6 +98,10 @@ class TriageSession:
         delta = datetime.utcnow() - self.last_updated
         return delta.total_seconds() / 3600 > timeout_hours
 
+    def to_storage_entity(self) -> dict:
+        """Alias for to_dynamodb_item for backward compatibility."""
+        return self.to_dynamodb_item()
+
     def to_dynamodb_item(self) -> dict:
         """Convert to DynamoDB item format."""
         return {
@@ -111,6 +115,11 @@ class TriageSession:
             "CreatedAt": self.created_at.isoformat() if self.created_at else None,
             "LastUpdated": self.last_updated.isoformat() if self.last_updated else None
         }
+
+    @classmethod
+    def from_storage_entity(cls, item: dict) -> 'TriageSession':
+        """Alias for from_dynamodb_item for backward compatibility."""
+        return cls.from_dynamodb_item(item)
 
     @classmethod
     def from_dynamodb_item(cls, item: dict) -> 'TriageSession':
