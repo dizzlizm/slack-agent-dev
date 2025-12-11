@@ -324,8 +324,6 @@ Resources:
           HttpMethod: "*"
           ThrottlingBurstLimit: 100
           ThrottlingRateLimit: 50
-          LoggingLevel: ERROR
-          DataTraceEnabled: false
           MetricsEnabled: true
       Tags:
         Application: systems-bot
