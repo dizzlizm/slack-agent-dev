@@ -28,9 +28,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Returns:
         API Gateway response
     """
-    # Load configuration
-    Config.load()
-
     # Get raw body and headers
     body = event.get('body', '')
     headers = event.get('headers', {})
@@ -51,11 +48,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.error("Invalid JSON in request body")
         return _response(400, "Invalid JSON")
 
-    # Handle URL verification challenge (before signature check - Slack requirement)
+    # Handle URL verification challenge BEFORE loading config
+    # This allows Slack to verify the endpoint before secrets are configured
     if req_body.get('type') == 'url_verification':
         challenge = req_body.get('challenge', '')
         logger.info("Responding to Slack URL verification challenge")
         return _response(200, challenge, content_type='text/plain')
+
+    # Load configuration (only needed for actual event processing)
+    Config.load()
 
     # Verify Slack signature
     timestamp = headers.get('x-slack-request-timestamp') or headers.get('X-Slack-Request-Timestamp', '')
