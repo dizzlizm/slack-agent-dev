@@ -318,6 +318,11 @@ Resources:
       Description: !Sub >-
         REST API for Systems Bot Slack integration (${Environment}).
         Exposes webhook endpoints for Slack events, interactive callbacks, and health monitoring.
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          ThrottlingBurstLimit: 100
+          ThrottlingRateLimit: 50
       Tags:
         Application: systems-bot
         Project: systems-bot
