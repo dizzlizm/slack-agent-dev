@@ -318,13 +318,11 @@ Resources:
       Description: !Sub >-
         REST API for Systems Bot Slack integration (${Environment}).
         Exposes webhook endpoints for Slack events, interactive callbacks, and health monitoring.
-      TracingEnabled: true
       MethodSettings:
         - ResourcePath: "/*"
           HttpMethod: "*"
           ThrottlingBurstLimit: 100
           ThrottlingRateLimit: 50
-          MetricsEnabled: true
       Tags:
         Application: systems-bot
         Project: systems-bot
@@ -391,77 +389,6 @@ Resources:
           Value: logging
         - Key: Function
           Value: health
-
-  # --------------------------------------------------------------------------
-  # CLOUDWATCH ALARMS
-  # --------------------------------------------------------------------------
-  SlackEventsErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${Environment}-slack-events-errors"
-      AlarmDescription: !Sub "Alarm when ${Environment}-slack-events Lambda errors exceed threshold"
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 2
-      Threshold: 5
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref SlackEventsFunction
-      TreatMissingData: notBreaching
-
-  SlackInteractiveErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${Environment}-slack-interactive-errors"
-      AlarmDescription: !Sub "Alarm when ${Environment}-slack-interactive Lambda errors exceed threshold"
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 2
-      Threshold: 5
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref SlackInteractiveFunction
-      TreatMissingData: notBreaching
-
-  ApiGateway5xxAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${Environment}-api-gateway-5xx-errors"
-      AlarmDescription: !Sub "Alarm when API Gateway 5xx errors exceed threshold (${Environment})"
-      MetricName: 5XXError
-      Namespace: AWS/ApiGateway
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 2
-      Threshold: 10
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: ApiName
-          Value: !Sub "${Environment}-systems-bot-api"
-      TreatMissingData: notBreaching
-
-  DeadLetterQueueAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${Environment}-dlq-messages"
-      AlarmDescription: !Sub "Alarm when messages appear in dead letter queue (${Environment})"
-      MetricName: ApproximateNumberOfMessagesVisible
-      Namespace: AWS/SQS
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      Dimensions:
-        - Name: QueueName
-          Value: !GetAtt DeadLetterQueue.QueueName
-      TreatMissingData: notBreaching
 
 # ============================================================================
 # OUTPUTS
