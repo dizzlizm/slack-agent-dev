@@ -102,6 +102,10 @@ Resources:
     Properties:
       FunctionName: !Sub "${Environment}-slack-events"
       Handler: src.handlers.slack_events.lambda_handler
+      Timeout: 10  # Short timeout - just needs to invoke processor async
+      Environment:
+        Variables:
+          MESSAGE_PROCESSOR_FUNCTION: !Ref MessageProcessorFunction
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref AuthorizedUsersTable
@@ -113,6 +117,10 @@ Resources:
             - Effect: Allow
               Action: secretsmanager:GetSecretValue
               Resource: !Ref BotSecrets
+        - Statement:
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !GetAtt MessageProcessorFunction.Arn
       Events:
         Api:
           Type: Api
@@ -120,6 +128,25 @@ Resources:
             RestApiId: !Ref Api
             Path: /slack/events
             Method: POST
+
+  MessageProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-message-processor"
+      Handler: src.handlers.message_processor.lambda_handler
+      Timeout: 60  # Longer timeout for AI processing
+      MemorySize: 512  # More memory for AI workloads
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AuthorizedUsersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConversationHistoryTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TriageSessionsTable
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref BotSecrets
 
   SlackInteractiveFunction:
     Type: AWS::Serverless::Function
