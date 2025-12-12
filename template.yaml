@@ -240,7 +240,6 @@ Resources:
         SlackEvents:
           Type: Api
           Properties:
-            RestApiId: !Ref ApiGateway
             Path: /slack/events
             Method: POST
 
@@ -273,7 +272,6 @@ Resources:
         SlackInteractive:
           Type: Api
           Properties:
-            RestApiId: !Ref ApiGateway
             Path: /slack/interactive
             Method: POST
 
@@ -302,27 +300,8 @@ Resources:
         Health:
           Type: Api
           Properties:
-            RestApiId: !Ref ApiGateway
             Path: /health
             Method: GET
-
-  # --------------------------------------------------------------------------
-  # API GATEWAY
-  # --------------------------------------------------------------------------
-  ApiGateway:
-    Type: AWS::Serverless::Api
-    Properties:
-      Name: !Sub "${Environment}-systems-bot-api"
-      StageName: !Ref Environment
-      Description: !Sub >-
-        REST API for Systems Bot Slack integration (${Environment}).
-        Exposes webhook endpoints for Slack events, interactive callbacks, and health monitoring.
-      Tags:
-        Application: systems-bot
-        Project: systems-bot
-        Environment: !Ref Environment
-        ManagedBy: aws-sam
-        Component: api
 
   # --------------------------------------------------------------------------
   # CLOUDWATCH LOG GROUPS
@@ -390,19 +369,19 @@ Resources:
 Outputs:
   ApiEndpoint:
     Description: API Gateway endpoint URL
-    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
 
   SlackEventsUrl:
     Description: Slack Events webhook URL
-    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/slack/events"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/slack/events"
 
   SlackInteractiveUrl:
     Description: Slack Interactive webhook URL
-    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/slack/interactive"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/slack/interactive"
 
   HealthUrl:
     Description: Health check URL
-    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/health"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/health"
 
   SecretArn:
     Description: ARN of the Secrets Manager secret
