@@ -3,7 +3,10 @@ AWS Lambda handler for Slack events.
 """
 import json
 import logging
+import os
 from typing import Dict, Any
+
+import boto3
 
 from src.config import Config
 from src.security import (
@@ -15,6 +18,17 @@ from src.security import (
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+# Lambda client for async invocation
+_lambda_client = None
+
+
+def _get_lambda_client():
+    """Get or create Lambda client (lazy initialization)."""
+    global _lambda_client
+    if _lambda_client is None:
+        _lambda_client = boto3.client('lambda')
+    return _lambda_client
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -126,18 +140,36 @@ def _handle_event_callback(req_body: Dict[str, Any]) -> Dict[str, Any]:
 
     logger.info(f"[{user_id}] Message in {channel_id}: {text[:50]}...")
 
-    # Process the message
-    # Note: In production, you'd want to invoke another Lambda asynchronously
-    # or use SQS to avoid Slack's 3-second timeout
-    try:
-        from src.core.message_router import route_message
+    # Invoke message processor Lambda asynchronously to avoid Slack's 3-second timeout
+    thread_ts = event.get("thread_ts")
+    processor_payload = {
+        'text': text,
+        'user_id': user_id,
+        'channel_id': channel_id,
+        'thread_ts': thread_ts,
+        'message_ts': message_ts
+    }
 
-        thread_ts = event.get("thread_ts")
-        route_message(text, user_id, channel_id, thread_ts, message_ts)
+    try:
+        processor_function = os.environ.get('MESSAGE_PROCESSOR_FUNCTION')
+        if processor_function:
+            lambda_client = _get_lambda_client()
+            lambda_client.invoke(
+                FunctionName=processor_function,
+                InvocationType='Event',  # Async invocation
+                Payload=json.dumps(processor_payload)
+            )
+            logger.info(f"Async invoked processor for message from {user_id}")
+        else:
+            # Fallback to sync processing if processor not configured
+            logger.warning("MESSAGE_PROCESSOR_FUNCTION not set, using sync processing")
+            from src.core.message_router import route_message
+            route_message(text, user_id, channel_id, thread_ts, message_ts)
 
     except Exception as e:
-        logger.error(f"Error processing message: {e}", exc_info=True)
+        logger.error(f"Error invoking message processor: {e}", exc_info=True)
 
+    # Return immediately to Slack (within 3 second requirement)
     return _response(200, "OK")
 
 
