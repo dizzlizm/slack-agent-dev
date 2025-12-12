@@ -30,25 +30,36 @@ def _initialize():
 
     logger.info("Initializing message router services...")
 
-    # Initialize Slack client
-    _slack_client = SlackClientWrapper()
+    try:
+        # Initialize Slack client
+        _slack_client = SlackClientWrapper()
+        logger.debug("SlackClientWrapper initialized")
 
-    # Initialize storage managers
-    _conversation_manager = ConversationManager()
-    _triage_manager = TriageSessionManager()
-    _auth_manager = AuthorizationManager()
+        # Initialize storage managers
+        _conversation_manager = ConversationManager()
+        logger.debug("ConversationManager initialized")
 
-    # Initialize MCP orchestrator if Gemini is enabled
-    if Config.is_gemini_enabled():
-        try:
-            from src.integrations.mcp_integration import GeminiMCPOrchestrator
-            _mcp_orchestrator = GeminiMCPOrchestrator()
-            logger.info("MCP Orchestrator initialized")
-        except Exception as e:
-            logger.warning(f"MCP Orchestrator not initialized: {e}")
+        _triage_manager = TriageSessionManager()
+        logger.debug("TriageSessionManager initialized")
 
-    _initialized = True
-    logger.info("Message router services initialized")
+        _auth_manager = AuthorizationManager()
+        logger.debug("AuthorizationManager initialized")
+
+        # Initialize MCP orchestrator if Gemini is enabled
+        if Config.is_gemini_enabled():
+            try:
+                from src.integrations.mcp_integration import GeminiMCPOrchestrator
+                _mcp_orchestrator = GeminiMCPOrchestrator()
+                logger.info("MCP Orchestrator initialized")
+            except Exception as e:
+                logger.warning(f"MCP Orchestrator not initialized: {e}")
+
+        _initialized = True
+        logger.info("Message router services initialized")
+
+    except Exception as e:
+        logger.error(f"Failed to initialize message router services: {e}", exc_info=True)
+        raise
 
 
 def route_message(
@@ -68,11 +79,12 @@ def route_message(
         thread_ts: Thread timestamp if in a thread
         message_ts: Message timestamp
     """
-    _initialize()
-
     logger.info(f"Routing message from {user_id} in {channel_id}: {text[:100]}")
 
     try:
+        # Initialize services (must be inside try block)
+        _initialize()
+
         # Check if user is authorized
         if not _auth_manager.is_authorized(user_id):
             logger.warning(f"Unauthorized user {user_id} attempted to use bot")
@@ -103,14 +115,16 @@ def route_message(
 
     except Exception as e:
         logger.error(f"Error routing message: {e}", exc_info=True)
-        try:
-            _slack_client.post_message(
-                channel=channel_id,
-                text="Sorry, I encountered an error processing your request. Please try again.",
-                thread_ts=thread_ts or message_ts
-            )
-        except Exception:
-            pass
+        # Only try to send error message if slack client was initialized
+        if _slack_client is not None:
+            try:
+                _slack_client.post_message(
+                    channel=channel_id,
+                    text="Sorry, I encountered an error processing your request. Please try again.",
+                    thread_ts=thread_ts or message_ts
+                )
+            except Exception:
+                pass
 
 
 def _handle_mcp_message(
