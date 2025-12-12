@@ -152,14 +152,21 @@ def _handle_event_callback(req_body: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         processor_function = os.environ.get('MESSAGE_PROCESSOR_FUNCTION')
+        logger.info(f"MESSAGE_PROCESSOR_FUNCTION env var: {processor_function}")
+
         if processor_function:
+            logger.info(f"Invoking processor Lambda: {processor_function}")
             lambda_client = _get_lambda_client()
-            lambda_client.invoke(
+            invoke_response = lambda_client.invoke(
                 FunctionName=processor_function,
                 InvocationType='Event',  # Async invocation
                 Payload=json.dumps(processor_payload)
             )
-            logger.info(f"Async invoked processor for message from {user_id}")
+            status_code = invoke_response.get('StatusCode', 'unknown')
+            logger.info(f"Async invoke response: StatusCode={status_code}")
+
+            if status_code != 202:
+                logger.error(f"Unexpected status code from async invoke: {status_code}")
         else:
             # Fallback to sync processing if processor not configured
             logger.warning("MESSAGE_PROCESSOR_FUNCTION not set, using sync processing")
@@ -168,6 +175,13 @@ def _handle_event_callback(req_body: Dict[str, Any]) -> Dict[str, Any]:
 
     except Exception as e:
         logger.error(f"Error invoking message processor: {e}", exc_info=True)
+        # Try sync fallback if async fails
+        try:
+            logger.info("Attempting sync fallback after async failure...")
+            from src.core.message_router import route_message
+            route_message(text, user_id, channel_id, thread_ts, message_ts)
+        except Exception as fallback_err:
+            logger.error(f"Sync fallback also failed: {fallback_err}", exc_info=True)
 
     # Return immediately to Slack (within 3 second requirement)
     return _response(200, "OK")
