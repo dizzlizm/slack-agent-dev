@@ -110,6 +110,21 @@ class Config:
                 cls.FRESHSERVICE_API_KEY = secrets.get("FRESHSERVICE_API_KEY")
                 cls.INTUNE_REBOOT_WEBHOOK_URL = secrets.get("INTUNE_REBOOT_WEBHOOK_URL")
 
+                # Validate required secrets are present
+                errors = []
+                if not cls.SLACK_BOT_TOKEN:
+                    errors.append("SLACK_BOT_TOKEN is missing or empty in Secrets Manager")
+                if not cls.SLACK_BOT_USER_ID:
+                    errors.append("SLACK_BOT_USER_ID is missing or empty in Secrets Manager")
+                if not cls.SLACK_SIGNING_SECRET:
+                    errors.append("SLACK_SIGNING_SECRET is missing or empty in Secrets Manager")
+
+                if errors:
+                    raise ConfigurationError(
+                        f"Missing required secrets in {secret_name}:\n" +
+                        "\n".join(f"  - {err}" for err in errors)
+                    )
+
                 logging.info(f"Loaded secrets from AWS Secrets Manager: {secret_name}")
 
             except ClientError as e:
