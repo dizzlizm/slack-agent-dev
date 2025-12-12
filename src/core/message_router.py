@@ -156,17 +156,17 @@ def _handle_mcp_message(
         logger.info("Adding thinking reaction...")
         _slack_client.add_reaction(channel_id, thread_ts, "thinking_face")
 
-        # Get conversation history for context
-        logger.info("Getting conversation history...")
-        history = _conversation_manager.get_history(user_id)
-        logger.info(f"Got history with {len(history.messages) if hasattr(history, 'messages') else 'unknown'} messages")
+        # Get user's email for context (MCP orchestrator uses email for user lookups)
+        logger.info("Getting user email from Slack...")
+        user_email = _slack_client.get_user_email(user_id)
+        logger.info(f"User email: {user_email}")
 
         # Process with MCP orchestrator
-        logger.info("Calling MCP orchestrator process_message...")
-        response = _mcp_orchestrator.process_message(
-            message=text,
-            user_id=user_id,
-            conversation_history=history.to_gemini_format()
+        # Note: process_query takes user_query and optional user_email
+        logger.info("Calling MCP orchestrator process_query...")
+        response = _mcp_orchestrator.process_query(
+            user_query=text,
+            user_email=user_email
         )
         logger.info(f"MCP orchestrator returned response: {len(response) if response else 0} chars")
 
