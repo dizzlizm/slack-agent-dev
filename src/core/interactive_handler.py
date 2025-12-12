@@ -280,16 +280,28 @@ def handle_interactive_payload(payload: Dict[str, Any]) -> None:
     """
     global _handler_instance
 
-    if _handler_instance is None:
-        # Initialize handler with required dependencies
-        slack_client = SlackClientWrapper()
-        auth_manager = AuthorizationManager()
-        triage_manager = TriageSessionManager()
+    try:
+        if _handler_instance is None:
+            logging.info("Initializing interactive handler services...")
+            # Initialize handler with required dependencies
+            slack_client = SlackClientWrapper()
+            logging.debug("SlackClientWrapper initialized")
 
-        _handler_instance = InteractiveHandler(
-            slack_client=slack_client,
-            auth_manager=auth_manager,
-            triage_manager=triage_manager
-        )
+            auth_manager = AuthorizationManager()
+            logging.debug("AuthorizationManager initialized")
 
-    _handler_instance.handle_payload(payload)
+            triage_manager = TriageSessionManager()
+            logging.debug("TriageSessionManager initialized")
+
+            _handler_instance = InteractiveHandler(
+                slack_client=slack_client,
+                auth_manager=auth_manager,
+                triage_manager=triage_manager
+            )
+            logging.info("Interactive handler services initialized")
+
+        _handler_instance.handle_payload(payload)
+
+    except Exception as e:
+        logging.error(f"Error in interactive handler: {e}", exc_info=True)
+        raise
