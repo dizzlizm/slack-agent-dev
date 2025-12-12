@@ -20,6 +20,12 @@ Globals:
         USE_AWS_SECRETS: "true"
 
 Resources:
+  # API Gateway
+  Api:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+
   # Secrets Manager
   BotSecrets:
     Type: AWS::SecretsManager::Secret
@@ -111,6 +117,7 @@ Resources:
         Api:
           Type: Api
           Properties:
+            RestApiId: !Ref Api
             Path: /slack/events
             Method: POST
 
@@ -134,6 +141,7 @@ Resources:
         Api:
           Type: Api
           Properties:
+            RestApiId: !Ref Api
             Path: /slack/interactive
             Method: POST
 
@@ -153,13 +161,14 @@ Resources:
         Api:
           Type: Api
           Properties:
+            RestApiId: !Ref Api
             Path: /health
             Method: GET
 
 Outputs:
   ApiUrl:
     Description: API Gateway URL
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+    Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
   SecretArn:
     Description: Secrets Manager ARN
     Value: !Ref BotSecrets
