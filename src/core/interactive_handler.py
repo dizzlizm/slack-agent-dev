@@ -32,7 +32,7 @@ class InteractiveHandler:
     def freshservice_tools(self):
         """Get Freshservice MCP tools instance."""
         if self._freshservice_tools is None:
-            from mcp_tools import FreshserviceTools
+            from src.integrations.mcp_tools import FreshserviceTools
             self._freshservice_tools = FreshserviceTools()
         return self._freshservice_tools
      
@@ -264,3 +264,32 @@ class InteractiveHandler:
         if original_ts:
             self.slack.remove_reaction(channel_id, original_ts, "eyes")
             self.triage.delete_session(channel_id, original_ts)
+
+
+# Module-level function for Lambda handler
+_handler_instance = None
+
+
+def handle_interactive_payload(payload: Dict[str, Any]) -> None:
+    """
+    Module-level function to handle interactive payloads.
+    Called by the Lambda handler.
+
+    Args:
+        payload: The Slack interactive payload
+    """
+    global _handler_instance
+
+    if _handler_instance is None:
+        # Initialize handler with required dependencies
+        slack_client = SlackClientWrapper()
+        auth_manager = AuthorizationManager()
+        triage_manager = TriageSessionManager()
+
+        _handler_instance = InteractiveHandler(
+            slack_client=slack_client,
+            auth_manager=auth_manager,
+            triage_manager=triage_manager
+        )
+
+    _handler_instance.handle_payload(payload)
