@@ -1,18 +1,111 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Systems Bot
+Description: Systems Bot - AI-powered Slack bot for IT support
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, prod]
 
 Globals:
   Function:
     Runtime: python3.12
     Timeout: 30
     MemorySize: 256
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        USE_AWS_SECRETS: "true"
 
 Resources:
+  # Secrets Manager
+  BotSecrets:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "systems-bot/${Environment}"
+
+  # DynamoDB Tables
+  AuthorizedUsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${Environment}-AuthorizedUsers"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+
+  ConversationHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${Environment}-ConversationHistory"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: TTL
+        Enabled: true
+
+  TriageSessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${Environment}-TriageSessions"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: OriginalUserID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: UserIndex
+          KeySchema:
+            - AttributeName: OriginalUserID
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: TTL
+        Enabled: true
+
+  # Lambda Functions
   SlackEventsFunction:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: !Sub "${Environment}-slack-events"
       Handler: src.handlers.slack_events.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AuthorizedUsersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConversationHistoryTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TriageSessionsTable
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref BotSecrets
       Events:
         Api:
           Type: Api
@@ -23,7 +116,19 @@ Resources:
   SlackInteractiveFunction:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: !Sub "${Environment}-slack-interactive"
       Handler: src.handlers.slack_interactive.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AuthorizedUsersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConversationHistoryTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TriageSessionsTable
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref BotSecrets
       Events:
         Api:
           Type: Api
@@ -34,11 +139,26 @@ Resources:
   HealthFunction:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: !Sub "${Environment}-health"
       Handler: src.handlers.health.lambda_handler
       Timeout: 10
+      MemorySize: 128
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref BotSecrets
       Events:
         Api:
           Type: Api
           Properties:
             Path: /health
             Method: GET
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway URL
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+  SecretArn:
+    Description: Secrets Manager ARN
+    Value: !Ref BotSecrets
