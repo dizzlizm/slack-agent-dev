@@ -114,7 +114,7 @@ def route_message(
         # Route to MCP orchestrator for natural language processing
         if _mcp_orchestrator:
             logger.info("MCP orchestrator available, routing to MCP handler")
-            _handle_mcp_message(text, user_id, channel_id, thread_ts or message_ts)
+            _handle_mcp_message(text, user_id, channel_id, thread_ts, message_ts)
         else:
             logger.warning("MCP orchestrator not available, sending fallback message")
             # Fallback: just acknowledge the message
@@ -145,16 +145,24 @@ def _handle_mcp_message(
     text: str,
     user_id: str,
     channel_id: str,
-    thread_ts: Optional[str]
+    thread_ts: Optional[str],
+    message_ts: Optional[str]
 ) -> None:
     """Handle a message using the MCP orchestrator."""
     logger.info(f"=== MCP MESSAGE HANDLER START ===")
     logger.info(f"Processing message for user {user_id} in channel {channel_id}")
+    logger.info(f"thread_ts={thread_ts}, message_ts={message_ts}")
+
+    # Determine timestamps for different operations
+    # Reactions go on the actual message (message_ts)
+    # Replies go in the thread (thread_ts) or start a new thread (message_ts)
+    reaction_ts = message_ts
+    reply_ts = thread_ts or message_ts
 
     try:
-        # Add thinking indicator
-        logger.info("Adding thinking reaction...")
-        _slack_client.add_reaction(channel_id, thread_ts, "thinking_face")
+        # Add thinking indicator to the user's message
+        logger.info(f"Adding thinking reaction to message {reaction_ts}...")
+        _slack_client.add_reaction(channel_id, reaction_ts, "thinking_face")
 
         # Get user's email for context (MCP orchestrator uses email for user lookups)
         logger.info("Getting user email from Slack...")
@@ -171,20 +179,20 @@ def _handle_mcp_message(
         logger.info(f"MCP orchestrator returned response: {len(response) if response else 0} chars")
 
         # Remove thinking indicator
-        logger.info("Removing thinking reaction...")
-        _slack_client.remove_reaction(channel_id, thread_ts, "thinking_face")
+        logger.info(f"Removing thinking reaction from message {reaction_ts}...")
+        _slack_client.remove_reaction(channel_id, reaction_ts, "thinking_face")
 
         # Validate response
         if not response or not response.strip():
             logger.warning("MCP orchestrator returned empty response, using fallback")
             response = "I processed your message but couldn't generate a response. Please try again."
 
-        # Post response
-        logger.info(f"Posting response to Slack (length: {len(response)})...")
+        # Post response in thread
+        logger.info(f"Posting response to Slack (length: {len(response)}), reply_ts={reply_ts}...")
         _slack_client.post_message(
             channel=channel_id,
             text=response,
-            thread_ts=thread_ts
+            thread_ts=reply_ts
         )
         logger.info("Response posted successfully")
 
@@ -197,7 +205,7 @@ def _handle_mcp_message(
     except Exception as e:
         logger.error(f"=== MCP MESSAGE HANDLER FAILED ===")
         logger.error(f"Error in MCP message handling: {e}", exc_info=True)
-        _slack_client.remove_reaction(channel_id, thread_ts, "thinking_face")
+        _slack_client.remove_reaction(channel_id, reaction_ts, "thinking_face")
         raise
 
 
