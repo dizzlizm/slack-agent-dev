@@ -1,5 +1,4 @@
-# AWS SDK
-boto3>=1.34.0
+# Note: boto3 is NOT listed here - Lambda runtime includes it already
 
 # Slack SDK
 slack-sdk>=3.23.0
