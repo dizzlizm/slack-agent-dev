@@ -16,12 +16,14 @@ help:
 	@echo "  make test-cov     - Run tests with coverage report"
 	@echo ""
 	@echo "SAM (Serverless Application Model):"
-	@echo "  make validate     - Validate SAM template"
-	@echo "  make build        - Build SAM application"
-	@echo "  make deploy-dev   - Deploy to dev environment"
-	@echo "  make deploy-prod  - Deploy to prod environment"
-	@echo "  make logs-dev     - Tail logs for dev slack-events function"
-	@echo "  make local-api    - Start local API Gateway for testing"
+	@echo "  make validate       - Validate SAM template"
+	@echo "  make build          - Build with Docker (cached, parallel)"
+	@echo "  make build-fast     - Build without Docker (faster)"
+	@echo "  make deploy-dev     - Build + deploy to dev"
+	@echo "  make deploy-dev-fast- Fast build + deploy to dev"
+	@echo "  make deploy-prod    - Build + deploy to prod"
+	@echo "  make logs-dev       - Tail logs for dev slack-events function"
+	@echo "  make local-api      - Start local API Gateway for testing"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  make clean        - Remove build artifacts"
@@ -59,11 +61,20 @@ validate:
 	sam validate --lint
 
 # Build SAM application (uses Docker for Linux compatibility)
+# --cached: reuse unchanged builds, --parallel: build functions simultaneously
 build:
-	sam build --use-container
+	sam build --use-container --cached --parallel
+
+# Quick build without container (faster, works for pure Python deps)
+build-fast:
+	sam build --cached --parallel
 
 # Deploy to dev environment
 deploy-dev: build
+	sam deploy --config-env dev
+
+# Quick deploy to dev (no container, faster)
+deploy-dev-fast: build-fast
 	sam deploy --config-env dev
 
 # Deploy to prod environment (requires confirmation)
