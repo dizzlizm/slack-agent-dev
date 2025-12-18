@@ -13,7 +13,6 @@ AI-powered Slack bot for IT support, running on AWS Lambda.
 ## Project Structure
 
 ```
-aws/
 ├── src/
 │   ├── handlers/          # Lambda function handlers
 │   │   ├── slack_events.py

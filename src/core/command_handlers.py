@@ -2,7 +2,6 @@
 Command handlers for bot commands.
 """
 import logging
-import json
 from typing import Optional
 
 from src.core.command_parser import (
@@ -13,7 +12,6 @@ from src.core.command_parser import (
 from src.integrations.slack_client import SlackClientWrapper
 from src.storage.auth_manager import AuthorizationManager
 from src.storage import ConversationManager
-# from conversation_manager import ConversationManager
 from src.integrations.gemini_service import GeminiService
 from src.exceptions import (
     BotException,
@@ -116,8 +114,6 @@ In monitored channels, I automatically start troubleshooting new support request
     
     def handle_ask(self, cmd: ParsedCommand) -> None:
         """Handle AI assistant questions."""
-        #self.auth.require_authorization(cmd.user_id)
-        
         # Extra safety: Don't process if somehow we're being called for our own messages
         if cmd.user_id == Config.SLACK_BOT_USER_ID:
             logging.warning("Attempted to process 'ask' command from bot itself, ignoring")

@@ -210,10 +210,6 @@ def validate_password_strength(password: str) -> None:
         raise InvalidCommandError(
             "Password must be at least 8 characters long"
         )
-    
-    # Add more validation as needed
-    # if not any(c.isupper() for c in password):
-    #     raise InvalidCommandError("Password must contain at least one uppercase letter")
 
 
 def parse_meraki_update_command(text: str) -> Tuple[str, str]:
