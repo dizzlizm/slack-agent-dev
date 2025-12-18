@@ -15,6 +15,7 @@ region = "us-east-1"
 confirm_changeset = false
 capabilities = "CAPABILITY_IAM"
 parameter_overrides = "Environment=dev"
+tags = "Application=systems-bot Environment=dev ManagedBy=aws-sam"
 
 # ============================================================================
 # PROD ENVIRONMENT
@@ -27,7 +28,7 @@ region = "us-east-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 parameter_overrides = "Environment=prod LogRetentionDays=30"
-tags = "Application=systems-bot Project=systems-bot Environment=prod ManagedBy=aws-sam"
+tags = "Application=systems-bot Environment=prod ManagedBy=aws-sam"
 
 # ============================================================================
 # DEFAULT (used when no config-env specified)
@@ -40,3 +41,4 @@ region = "us-east-1"
 confirm_changeset = false
 capabilities = "CAPABILITY_IAM"
 parameter_overrides = "Environment=dev"
+tags = "Application=systems-bot Environment=dev ManagedBy=aws-sam"
