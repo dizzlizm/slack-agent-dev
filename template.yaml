@@ -18,6 +18,10 @@ Globals:
       Variables:
         ENVIRONMENT: !Ref Environment
         USE_AWS_SECRETS: "true"
+    Tags:
+      Application: systems-bot
+      Environment: !Ref Environment
+      ManagedBy: aws-sam
 
 Resources:
   # API Gateway
