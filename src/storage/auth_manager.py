@@ -3,7 +3,7 @@ Authorization management using DynamoDB.
 """
 import logging
 import time
-from typing import Set, Optional
+from typing import Optional, Set
 
 from src.config import Config
 from src.exceptions import AuthorizationError, StorageError
@@ -171,15 +171,3 @@ class AuthorizationManager:
         """
         self._load_cache()
         return self._cache.copy()
-
-
-# Singleton instance
-_auth_manager: Optional[AuthorizationManager] = None
-
-
-def get_auth_manager() -> AuthorizationManager:
-    """Get or create the singleton auth manager."""
-    global _auth_manager
-    if _auth_manager is None:
-        _auth_manager = AuthorizationManager()
-    return _auth_manager

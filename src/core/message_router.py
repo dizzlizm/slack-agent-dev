@@ -3,7 +3,7 @@ Message routing for Slack messages.
 Routes incoming messages to appropriate handlers.
 """
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from src.config import Config
 from src.integrations.slack_client import SlackClientWrapper
@@ -16,7 +16,7 @@ _slack_client: Optional[SlackClientWrapper] = None
 _conversation_manager: Optional[ConversationManager] = None
 _triage_manager: Optional[TriageSessionManager] = None
 _auth_manager: Optional[AuthorizationManager] = None
-_mcp_orchestrator: Optional[any] = None
+_mcp_orchestrator: Optional[Any] = None
 _initialized = False
 
 
@@ -225,11 +225,11 @@ def _handle_triage_message(
             triage_manager=_triage_manager
         )
 
-        workflow.continue_triage(
-            session=session,
-            user_response=text,
+        workflow.handle_triage_reply(
             channel_id=channel_id,
-            thread_ts=thread_ts
+            thread_ts=thread_ts,
+            user_id=user_id,
+            reply_text=text
         )
 
     except Exception as e:

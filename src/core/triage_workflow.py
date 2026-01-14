@@ -6,7 +6,6 @@ import json
 
 from src.integrations.slack_client import SlackClientWrapper
 from src.storage import TriageSessionManager
-# from triage_manager import TriageSessionManager
 from src.integrations.gemini_service import GeminiService
 from src.exceptions import BotException, IntegrationNotConfiguredError
 from src.config import Config
