@@ -16,18 +16,19 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     AWS Lambda entry point for health checks.
     Returns basic health status without requiring full config.
     """
+    from src.config import Config
+
     try:
         environment = os.environ.get("ENVIRONMENT", "unknown")
 
         health_status = {
             "status": "healthy",
             "environment": environment,
-            "version": "2.0.0"
+            "version": Config.APP_VERSION
         }
 
         # Try to load full config for detailed status
         try:
-            from src.config import Config
             Config.load()
             health_status["integrations"] = {
                 "gemini": Config.is_gemini_enabled(),

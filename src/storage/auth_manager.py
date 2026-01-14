@@ -3,7 +3,7 @@ Authorization management using DynamoDB.
 """
 import logging
 import time
-from typing import Set, Optional
+from typing import Optional, Set
 
 from src.config import Config
 from src.exceptions import AuthorizationError, StorageError
@@ -11,9 +11,6 @@ from src.exceptions import AuthorizationError, StorageError
 
 class AuthorizationManager:
     """Manages user authorization using DynamoDB with TTL-based cache."""
-
-    # Cache TTL in seconds (5 minutes)
-    CACHE_TTL_SECONDS = 300
 
     def __init__(self, table=None):
         """
@@ -41,7 +38,7 @@ class AuthorizationManager:
         """Check if the cache has expired and needs refresh."""
         if not self._cache_loaded or self._cache_timestamp is None:
             return True
-        return (time.time() - self._cache_timestamp) > self.CACHE_TTL_SECONDS
+        return (time.time() - self._cache_timestamp) > Config.AUTH_CACHE_TTL_SECONDS
 
     def _load_cache(self, force: bool = False) -> None:
         """
@@ -171,15 +168,3 @@ class AuthorizationManager:
         """
         self._load_cache()
         return self._cache.copy()
-
-
-# Singleton instance
-_auth_manager: Optional[AuthorizationManager] = None
-
-
-def get_auth_manager() -> AuthorizationManager:
-    """Get or create the singleton auth manager."""
-    global _auth_manager
-    if _auth_manager is None:
-        _auth_manager = AuthorizationManager()
-    return _auth_manager
