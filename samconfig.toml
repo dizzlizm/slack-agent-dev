@@ -27,7 +27,7 @@ s3_prefix = "systems-bot-prod"
 region = "us-east-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "Environment=prod LogRetentionDays=30"
+parameter_overrides = "Environment=prod"
 tags = "Application=systems-bot Environment=prod ManagedBy=aws-sam"
 
 # ============================================================================

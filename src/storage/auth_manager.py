@@ -12,9 +12,6 @@ from src.exceptions import AuthorizationError, StorageError
 class AuthorizationManager:
     """Manages user authorization using DynamoDB with TTL-based cache."""
 
-    # Cache TTL in seconds (5 minutes)
-    CACHE_TTL_SECONDS = 300
-
     def __init__(self, table=None):
         """
         Initialize the authorization manager.
@@ -41,7 +38,7 @@ class AuthorizationManager:
         """Check if the cache has expired and needs refresh."""
         if not self._cache_loaded or self._cache_timestamp is None:
             return True
-        return (time.time() - self._cache_timestamp) > self.CACHE_TTL_SECONDS
+        return (time.time() - self._cache_timestamp) > Config.AUTH_CACHE_TTL_SECONDS
 
     def _load_cache(self, force: bool = False) -> None:
         """

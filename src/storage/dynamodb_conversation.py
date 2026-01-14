@@ -1,6 +1,5 @@
 """
 Conversation history management using DynamoDB.
-Drop-in replacement for Azure Table Storage version.
 """
 import logging
 import time
@@ -76,8 +75,8 @@ class ConversationManager:
             if len(history.messages) > Config.MAX_CONVERSATION_HISTORY:
                 history.messages = history.messages[-Config.MAX_CONVERSATION_HISTORY:]
 
-            # TTL: 30 days from now
-            ttl = int(time.time()) + (30 * 24 * 60 * 60)
+            # TTL for auto-cleanup
+            ttl = int(time.time()) + (Config.CONVERSATION_HISTORY_TTL_DAYS * 24 * 60 * 60)
 
             self.table.put_item(
                 Item={

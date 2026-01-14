@@ -55,9 +55,12 @@ class Config:
     INTUNE_REBOOT_WEBHOOK_URL: Optional[str] = None
 
     # Application Settings
+    APP_VERSION: str = "2.0.0"
     MAX_CONVERSATION_HISTORY: int = 20
     TRIAGE_SESSION_TIMEOUT_HOURS: int = 24
     REQUEST_TIMEOUT_SECONDS: int = 30
+    CONVERSATION_HISTORY_TTL_DAYS: int = 30
+    AUTH_CACHE_TTL_SECONDS: int = 300
 
     _loaded = False
 

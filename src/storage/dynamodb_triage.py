@@ -1,6 +1,5 @@
 """
 Triage session management using DynamoDB.
-Drop-in replacement for Azure Table Storage version.
 """
 import logging
 import time
