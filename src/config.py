@@ -43,9 +43,9 @@ class Config:
 
     # Gemini Configuration
     GEMINI_API_KEY: Optional[str] = None
-    GEMINI_MODEL_TRIAGE: str = "gemini-2.0-flash"
-    GEMINI_MODEL_ASK: str = "gemini-2.0-flash"
-    GEMINI_MODEL_TICKET: str = "gemini-2.0-flash"
+    GEMINI_MODEL_TRIAGE: str = "gemini-2.5-flash"
+    GEMINI_MODEL_ASK: str = "gemini-2.5-flash"
+    GEMINI_MODEL_TICKET: str = "gemini-2.5-flash"
 
     # Freshservice Configuration
     FRESHSERVICE_DOMAIN: Optional[str] = None

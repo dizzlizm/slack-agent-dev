@@ -34,7 +34,7 @@ class GeminiMCPOrchestrator:
             raise ValueError("Gemini configuration missing.")
 
         self.client = genai.Client(api_key=self.api_key)
-        self.model_name = 'gemini-2.0-flash'
+        self.model_name = 'gemini-2.5-flash'
         self.tools = self._define_all_tools()
 
         # Get direct access to ALL tools (Freshservice, Meraki, Intune)
