@@ -231,7 +231,314 @@ class GeminiMCPOrchestrator:
                 required=["query"]
             )
         )
+        # === NEW PHASE 2 TOOLS ===
 
+        update_ticket = types.FunctionDeclaration(
+            name="update_ticket",
+            description=(
+                "Update an existing ticket's status, priority, or assignment. "
+                "Use this to change ticket properties after creation."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "ticket_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="The ticket ID to update."
+                    ),
+                    "status": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="New status (2=Open, 3=Pending, 4=Resolved, 5=Closed)."
+                    ),
+                    "priority": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="New priority (1=Low, 2=Medium, 3=High, 4=Urgent)."
+                    ),
+                    "agent_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Assign to agent ID."
+                    ),
+                    "group_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Assign to group/queue ID."
+                    )
+                },
+                required=["ticket_id"]
+            )
+        )
+
+        add_ticket_note = types.FunctionDeclaration(
+            name="add_ticket_note",
+            description=(
+                "Add a note or comment to an existing ticket. "
+                "Use this to update ticket progress or communicate with the requester."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "ticket_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="The ticket ID."
+                    ),
+                    "body": types.Schema(
+                        type=types.Type.STRING,
+                        description="The note content."
+                    ),
+                    "private": types.Schema(
+                        type=types.Type.BOOLEAN,
+                        description="Whether note is private (internal only). Default false."
+                    )
+                },
+                required=["ticket_id", "body"]
+            )
+        )
+
+        get_ticket_conversations = types.FunctionDeclaration(
+            name="get_ticket_conversations",
+            description=(
+                "Get all conversations and notes for a ticket to see communication history."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "ticket_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="The ticket ID."
+                    )
+                },
+                required=["ticket_id"]
+            )
+        )
+
+        get_asset_software = types.FunctionDeclaration(
+            name="get_asset_software",
+            description=(
+                "Get software installed on an asset for license compliance and inventory. "
+                "Uses FreshService's built-in asset-software relationship tracking."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "asset_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="The asset ID."
+                    )
+                },
+                required=["asset_id"]
+            )
+        )
+
+        get_asset_contracts = types.FunctionDeclaration(
+            name="get_asset_contracts",
+            description=(
+                "Get contracts (warranty, support) associated with an asset. "
+                "Uses FreshService's built-in asset-contract relationship tracking."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "asset_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="The asset ID."
+                    )
+                },
+                required=["asset_id"]
+            )
+        )
+
+        list_service_items = types.FunctionDeclaration(
+            name="list_service_items",
+            description=(
+                "List available service catalog items (pre-configured service requests with workflows). "
+                "Use this when users want to request standard services like access, provisioning, etc."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "category_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Optional category ID to filter items."
+                    ),
+                    "search_query": types.Schema(
+                        type=types.Type.STRING,
+                        description="Optional search term."
+                    )
+                }
+            )
+        )
+
+        get_service_item = types.FunctionDeclaration(
+            name="get_service_item",
+            description=(
+                "Get detailed information about a service catalog item including required custom fields."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "item_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="The service item ID."
+                    )
+                },
+                required=["item_id"]
+            )
+        )
+
+        create_service_request = types.FunctionDeclaration(
+            name="create_service_request",
+            description=(
+                "Create a service request from catalog item. "
+                "This leverages FreshService's built-in workflows with approvals, automation, and fulfillment tracking."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "service_item_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="The service item ID."
+                    ),
+                    "requester_email": types.Schema(
+                        type=types.Type.STRING,
+                        description="Email of requester."
+                    ),
+                    "custom_fields": types.Schema(
+                        type=types.Type.OBJECT,
+                        description="Item-specific custom fields as key-value pairs."
+                    )
+                },
+                required=["service_item_id", "requester_email"]
+            )
+        )
+
+        list_service_categories = types.FunctionDeclaration(
+            name="list_service_categories",
+            description="List all service catalog categories to explore available services.",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={}
+            )
+        )
+
+        get_service_request_status = types.FunctionDeclaration(
+            name="get_service_request_status",
+            description=(
+                "Get status of a service request including approval and fulfillment progress."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "service_request_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="The service request ID."
+                    )
+                },
+                required=["service_request_id"]
+            )
+        )
+
+        list_problems = types.FunctionDeclaration(
+            name="list_problems",
+            description=(
+                "List known problems (root causes of recurring incidents). "
+                "Use this to check if a reported issue is already known."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "status": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Filter by status (1=Open, 2=Change Requested, 3=Closed)."
+                    ),
+                    "priority": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Filter by priority (1=Low, 2=Medium, 3=High, 4=Urgent)."
+                    ),
+                    "impact": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Filter by impact (1=Low, 2=Medium, 3=High)."
+                    ),
+                    "limit": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Maximum number of results (default 10)."
+                    )
+                }
+            )
+        )
+
+        get_problem_by_id = types.FunctionDeclaration(
+            name="get_problem_by_id",
+            description="Get detailed information about a specific problem including root cause analysis.",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "problem_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="The problem ID."
+                    )
+                },
+                required=["problem_id"]
+            )
+        )
+
+        link_ticket_to_problem = types.FunctionDeclaration(
+            name="link_ticket_to_problem",
+            description=(
+                "Associate a ticket with a known problem for impact tracking. "
+                "When problem is resolved, all linked tickets are automatically updated."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "ticket_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="The ticket ID."
+                    ),
+                    "problem_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="The problem ID."
+                    )
+                },
+                required=["ticket_id", "problem_id"]
+            )
+        )
+
+        get_problem_tickets = types.FunctionDeclaration(
+            name="get_problem_tickets",
+            description="Get all tickets associated with a problem to understand scope/impact.",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "problem_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="The problem ID."
+                    )
+                },
+                required=["problem_id"]
+            )
+        )
+
+        search_problems = types.FunctionDeclaration(
+            name="search_problems",
+            description=(
+                "Search problems by keyword to check if a user's issue matches a known problem."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "query": types.Schema(
+                        type=types.Type.STRING,
+                        description="Search term."
+                    ),
+                    "limit": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Maximum number of results (default 10)."
+                    )
+                },
+                required=["query"]
+            )
+        )
+
+        # === SOLUTION OPERATIONS ===
         get_solution_article = types.FunctionDeclaration(
             name="get_solution_article",
             description=(
@@ -348,12 +655,25 @@ class GeminiMCPOrchestrator:
         )
 
         return types.Tool(function_declarations=[
-            # Freshservice (14 tools)
-            get_user_email, get_user_name, list_tickets, list_assets, list_changes,
-            get_ticket_by_id, get_asset_by_id, create_ticket,
+            # Freshservice User operations
+            get_user_email, get_user_name,
+            # Freshservice Ticket operations
+            list_tickets, get_ticket_by_id, create_ticket,
+            update_ticket, add_ticket_note, get_ticket_conversations,
+            # Freshservice Asset operations
+            list_assets, get_asset_by_id, get_asset_software, get_asset_contracts,
+            # Freshservice Change operations
+            list_changes,
+            # Service Catalog operations
+            list_service_items, get_service_item, create_service_request,
+            list_service_categories, get_service_request_status,
+            # Problem Management operations
+            list_problems, get_problem_by_id, link_ticket_to_problem,
+            get_problem_tickets, search_problems,
+            # Solution/Knowledge Base operations
             search_solution_articles, get_solution_article, list_solution_articles,
             get_popular_articles, list_solution_categories, list_solution_folders,
-            # Intune (1 tool)
+            # Intune operations
             reboot_device
         ])
 
@@ -374,7 +694,7 @@ class GeminiMCPOrchestrator:
         # Build system instruction for intelligent routing
         system_instr = (
             "You are an intelligent IT Support Assistant with access to multiple systems:\n"
-            "- Freshservice: IT tickets, user info, assets, change requests, KNOWLEDGE BASE\n"
+            "- Freshservice: IT tickets, user info, assets, SOFTWARE, CONTRACTS, change requests, KNOWLEDGE BASE, SERVICE CATALOG, PROBLEMS\n"
             "- Intune: Device management (remote reboot, device status)\n\n"
 
             "## IMPORTANT: When to Use Tools vs Answer Directly\n\n"
@@ -395,9 +715,25 @@ class GeminiMCPOrchestrator:
             "- Searching KB: search_solution_articles(), get_solution_article()\n"
             "- Looking up specific tickets, assets, or users in Freshservice\n"
             "- Creating tickets when user is reporting an actual problem or issue\n"
+            "- Updating tickets: update_ticket(), add_ticket_note(), get_ticket_conversations()\n"
+            "- Asset details: get_asset_software() for installed software, get_asset_contracts() for warranty\n"
+            "- Service Catalog: list_service_items(), create_service_request() for standard service requests with workflows\n"
+            "- Problem Management: search_problems() to check if issue is a known problem, link_ticket_to_problem() for tracking\n"
             "- Checking if there are planned outages (list_recent_changes)\n"
             "- Rebooting devices via Intune (REQUIRES explicit user confirmation - see below)\n"
             "- Getting data from IT systems (not from your knowledge base)\n\n"
+
+            "**NEW CAPABILITIES:**\n"
+            "- Service Catalog: For standard requests (access, provisioning, etc), use list_service_items() and create_service_request()\n"
+            "  - Service requests have built-in approval workflows, custom fields, and automatic fulfillment tracking\n"
+            "  - Example: 'I need access to X' → list_service_items(search='access') → create_service_request()\n"
+            "- Problem Management: Check if recurring issues are known problems\n"
+            "  - search_problems(query) finds related known problems\n"
+            "  - link_ticket_to_problem() associates tickets with root cause for impact tracking\n"
+            "  - Example: User reports 'email down' → search_problems('email') → if found, link ticket to problem\n"
+            "- Asset Software & Contracts:\n"
+            "  - get_asset_software() shows installed software for license compliance\n"
+            "  - get_asset_contracts() shows warranty, support entitlements, renewal dates\n\n"
 
             "**CRITICAL - Device Reboot Safety:**\n"
             "- Rebooting a device is DISRUPTIVE and will interrupt the user's work\n"
@@ -410,8 +746,10 @@ class GeminiMCPOrchestrator:
             "- Simple questions about technology concepts\n"
             "- Requests for information or explanations\n"
             "- General troubleshooting advice\n"
+            "- Standard service requests that should use Service Catalog (access provisioning, account setup, etc.)\n"
             "ONLY create tickets when user says things like: 'my laptop is broken', 'I need help with X not working', 'create a ticket for...'\n"
-            "ALWAYS search the knowledge base FIRST - you may find a self-service article that solves their issue!\n\n"
+            "ALWAYS search the knowledge base FIRST - you may find a self-service article that solves their issue!\n"
+            "For standard requests, check Service Catalog items first - they have pre-configured workflows!\n\n"
 
             "## How to Handle User Queries\n"
             "When a user asks a question, intelligently choose which tool(s) to use and chain them together:\n\n"
@@ -422,6 +760,19 @@ class GeminiMCPOrchestrator:
             "3. Check get_popular_articles() to see what issues are trending\n"
             "4. If article found, provide the solution AND the article URL for reference\n"
             "5. Only create ticket if NO relevant KB article exists\n\n"
+
+            "**Service Catalog Workflow (for standard requests):**\n"
+            "1. User asks 'I need access to SharePoint' → list_service_items(search='sharepoint access')\n"
+            "2. If service item exists → create_service_request(item_id, requester_email, custom_fields)\n"
+            "3. Service requests automatically route through approval workflows and fulfillment\n"
+            "4. Track progress with get_service_request_status()\n\n"
+
+            "**Problem Management Workflow (for recurring issues):**\n"
+            "1. User reports common issue → search_problems(query) to check if known\n"
+            "2. If problem found → get_problem_by_id() for root cause and workaround\n"
+            "3. Provide workaround info to user\n"
+            "4. Create ticket for tracking → link_ticket_to_problem() for automatic updates\n"
+            "5. When problem is resolved, all linked tickets auto-update\n\n"
 
             "**Looking up users:**\n"
             "- If you see email addresses in the query (especially in [Mentioned users: ...] context), use get_user_by_email\n"

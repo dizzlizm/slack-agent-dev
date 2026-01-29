@@ -190,3 +190,213 @@ class TicketOperations(FreshserviceClient):
         except requests.RequestException as e:
             logging.error(f"Error creating ticket: {e}")
             raise ValueError(f"Failed to create ticket: {str(e)}")
+
+    @retry_on_failure(max_retries=3, backoff_factor=0.5)
+    def update_ticket(
+        self,
+        ticket_id: int,
+        status: Optional[int] = None,
+        priority: Optional[int] = None,
+        description: Optional[str] = None,
+        agent_id: Optional[int] = None,
+        group_id: Optional[int] = None,
+        custom_fields: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Update an existing ticket's properties.
+        
+        Args:
+            ticket_id: The ticket ID to update
+            status: New status (2=Open, 3=Pending, 4=Resolved, 5=Closed)
+            priority: New priority (1=Low, 2=Medium, 3=High, 4=Urgent)
+            description: New description (appends to existing)
+            agent_id: Assign to specific agent
+            group_id: Assign to specific group
+            custom_fields: Dictionary of custom field values
+            
+        Returns:
+            Dictionary with updated ticket information
+            
+        Raises:
+            ValueError: If update fails or invalid parameters
+        """
+        self._ensure_configured()
+        
+        if not any([status, priority, description, agent_id, group_id, custom_fields]):
+            raise ValueError("At least one field must be provided for update")
+        
+        # Validate status
+        if status is not None and status not in [2, 3, 4, 5]:
+            raise ValueError("status must be 2 (Open), 3 (Pending), 4 (Resolved), or 5 (Closed)")
+        
+        # Validate priority
+        if priority is not None and priority not in [1, 2, 3, 4]:
+            raise ValueError("priority must be 1 (Low), 2 (Medium), 3 (High), or 4 (Urgent)")
+        
+        url = f"{self.base_url}/tickets/{ticket_id}"
+        
+        payload = {}
+        if status is not None:
+            payload["status"] = status
+        if priority is not None:
+            payload["priority"] = priority
+        if description:
+            payload["description"] = description
+        if agent_id:
+            payload["responder_id"] = agent_id
+        if group_id:
+            payload["group_id"] = group_id
+        if custom_fields:
+            payload["custom_fields"] = custom_fields
+        
+        try:
+            response = requests.put(
+                url,
+                auth=self._get_auth(),
+                headers=self._get_headers(),
+                json=payload,
+                timeout=10
+            )
+            
+            if response.status_code == 404:
+                raise ValueError(f"Ticket #{ticket_id} not found")
+            
+            response.raise_for_status()
+            
+            ticket = response.json().get("ticket", {})
+            
+            return {
+                "ticket_id": ticket["id"],
+                "subject": ticket["subject"],
+                "status": ticket["status"],
+                "priority": ticket["priority"],
+                "updated_at": ticket["updated_at"]
+            }
+        except requests.RequestException as e:
+            logging.error(f"Error updating ticket #{ticket_id}: {e}")
+            raise ValueError(f"Failed to update ticket: {str(e)}")
+
+    @retry_on_failure(max_retries=3, backoff_factor=0.5)
+    def add_ticket_note(
+        self,
+        ticket_id: int,
+        body: str,
+        private: bool = True,
+        notify_emails: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Add a note or reply to an existing ticket.
+        
+        Args:
+            ticket_id: The ticket ID to add note to
+            body: Note content (can be HTML or plain text)
+            private: Whether note is internal only (default True)
+            notify_emails: Optional list of emails to notify
+            
+        Returns:
+            Dictionary with note information
+            
+        Raises:
+            ValueError: If note creation fails
+        """
+        self._ensure_configured()
+        
+        if not body or not body.strip():
+            raise ValueError("Note body cannot be empty")
+        
+        url = f"{self.base_url}/tickets/{ticket_id}/notes"
+        
+        payload = {
+            "body": body,
+            "private": private
+        }
+        
+        if notify_emails:
+            payload["notify_emails"] = notify_emails
+        
+        try:
+            response = requests.post(
+                url,
+                auth=self._get_auth(),
+                headers=self._get_headers(),
+                json=payload,
+                timeout=10
+            )
+            
+            if response.status_code == 404:
+                raise ValueError(f"Ticket #{ticket_id} not found")
+            
+            response.raise_for_status()
+            
+            note = response.json().get("conversation", {})
+            
+            return {
+                "note_id": note.get("id"),
+                "ticket_id": ticket_id,
+                "body": note.get("body_text", body),
+                "private": note.get("private", private),
+                "created_at": note.get("created_at")
+            }
+        except requests.RequestException as e:
+            logging.error(f"Error adding note to ticket #{ticket_id}: {e}")
+            raise ValueError(f"Failed to add note: {str(e)}")
+
+    @retry_on_failure(max_retries=3, backoff_factor=0.5)
+    def get_ticket_conversations(
+        self,
+        ticket_id: int,
+        include_private: bool = True
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all conversations/notes on a ticket.
+        
+        Args:
+            ticket_id: The ticket ID to get conversations for
+            include_private: Whether to include internal notes (default True)
+            
+        Returns:
+            List of conversation dictionaries with body, author, timestamp
+            
+        Raises:
+            ValueError: If retrieval fails
+        """
+        self._ensure_configured()
+        
+        url = f"{self.base_url}/tickets/{ticket_id}/conversations"
+        
+        try:
+            response = requests.get(
+                url,
+                auth=self._get_auth(),
+                headers=self._get_headers(),
+                timeout=10
+            )
+            
+            if response.status_code == 404:
+                raise ValueError(f"Ticket #{ticket_id} not found")
+            
+            response.raise_for_status()
+            
+            conversations = response.json().get("conversations", [])
+            
+            # Filter and format conversations
+            result = []
+            for conv in conversations:
+                # Skip private notes if not requested
+                if not include_private and conv.get("private", False):
+                    continue
+                
+                result.append({
+                    "id": conv.get("id"),
+                    "body": conv.get("body_text", ""),
+                    "private": conv.get("private", False),
+                    "user_id": conv.get("user_id"),
+                    "created_at": conv.get("created_at"),
+                    "incoming": conv.get("incoming", False)  # True if from requester
+                })
+            
+            return result
+        except requests.RequestException as e:
+            logging.error(f"Error getting conversations for ticket #{ticket_id}: {e}")
+            raise ValueError(f"Failed to get conversations: {str(e)}")
+
