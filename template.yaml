@@ -34,13 +34,13 @@ Resources:
   BotSecrets:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub "systems-bot/${Environment}"
+      Name: !Sub "slack-agent-systems-bot/${Environment}"
 
   # DynamoDB Tables
   AuthorizedUsersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${Environment}-AuthorizedUsers"
+      TableName: !Sub "slack-agent-${Environment}-AuthorizedUsers"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: PK
@@ -56,7 +56,7 @@ Resources:
   ConversationHistoryTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${Environment}-ConversationHistory"
+      TableName: !Sub "slack-agent-${Environment}-ConversationHistory"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: PK
@@ -75,7 +75,7 @@ Resources:
   TriageSessionsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${Environment}-TriageSessions"
+      TableName: !Sub "slack-agent-${Environment}-TriageSessions"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: PK
@@ -103,7 +103,7 @@ Resources:
   AuditLogTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${Environment}-AuditLog"
+      TableName: !Sub "slack-agent-${Environment}-AuditLog"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: PK
@@ -151,7 +151,7 @@ Resources:
   SlackEventsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub "${Environment}-slack-events"
+      FunctionName: !Sub "slack-agent-${Environment}-slack-events"
       Handler: src.handlers.slack_events.lambda_handler
       Timeout: 10  # Short timeout - just needs to invoke processor async
       Environment:
@@ -190,7 +190,7 @@ Resources:
   MessageProcessorFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub "${Environment}-message-processor"
+      FunctionName: !Sub "slack-agent-${Environment}-message-processor"
       Handler: src.handlers.message_processor.lambda_handler
       Timeout: 60  # Longer timeout for AI processing
       MemorySize: 512  # More memory for AI workloads
@@ -216,7 +216,7 @@ Resources:
   SlackInteractiveFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub "${Environment}-slack-interactive"
+      FunctionName: !Sub "slack-agent-${Environment}-slack-interactive"
       Handler: src.handlers.slack_interactive.lambda_handler
       Policies:
         - DynamoDBCrudPolicy:
@@ -247,7 +247,7 @@ Resources:
   HealthFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub "${Environment}-health"
+      FunctionName: !Sub "slack-agent-${Environment}-health"
       Handler: src.handlers.health.lambda_handler
       Timeout: 10
       MemorySize: 128
@@ -291,7 +291,7 @@ Outputs:
     Description: Audit Log DynamoDB Table Name
     Value: !Ref AuditLogTable
     Export:
-      Name: !Sub "${Environment}-AuditLogTableName"
+      Name: !Sub "slack-agent-${Environment}-AuditLogTableName"
   HealthEndpoint:
     Description: Health Check Endpoint
     Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/health"

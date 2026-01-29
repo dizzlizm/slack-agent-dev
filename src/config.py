@@ -75,7 +75,7 @@ class Config:
         # Determine environment
         cls.ENVIRONMENT = os.environ.get("ENVIRONMENT", "dev")
         cls.AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
-        cls.DYNAMODB_TABLE_PREFIX = f"{cls.ENVIRONMENT}-"
+        cls.DYNAMODB_TABLE_PREFIX = f"slack-agent-{cls.ENVIRONMENT}-"
 
         logging.info(f"Loading configuration for environment: {cls.ENVIRONMENT}")
 
@@ -98,7 +98,7 @@ class Config:
             from botocore.exceptions import ClientError
 
             client = boto3.client('secretsmanager', region_name=cls.AWS_REGION)
-            secret_name = f"systems-bot/{cls.ENVIRONMENT}"
+            secret_name = f"slack-agent-systems-bot/{cls.ENVIRONMENT}"
 
             try:
                 response = client.get_secret_value(SecretId=secret_name)
@@ -231,7 +231,7 @@ class Config:
             base_name: Base table name (e.g., 'AuthorizedUsers')
 
         Returns:
-            Prefixed table name (e.g., 'dev-AuthorizedUsers')
+            Prefixed table name (e.g., 'slack-agent-dev-AuthorizedUsers')
         """
         return f"{cls.DYNAMODB_TABLE_PREFIX}{base_name}"
 

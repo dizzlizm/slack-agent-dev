@@ -22,7 +22,7 @@ Resources:
   AlarmTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub "${Environment}-systems-bot-alarms"
+      TopicName: !Sub "slack-agent-${Environment}-systems-bot-alarms"
       DisplayName: Systems Bot Monitoring Alarms
       Subscription:
         - !If
@@ -35,7 +35,7 @@ Resources:
   HighAuditVolumeAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${Environment}-systems-bot-high-audit-volume"
+      AlarmName: !Sub "slack-agent-${Environment}-systems-bot-high-audit-volume"
       AlarmDescription: Alert when audit event volume is unusually high (potential cost issue or infinite loop)
       MetricName: AuditEvents
       Namespace: SystemsBot/Audit
@@ -52,7 +52,7 @@ Resources:
   HighErrorRateAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${Environment}-systems-bot-high-error-rate"
+      AlarmName: !Sub "slack-agent-${Environment}-systems-bot-high-error-rate"
       AlarmDescription: Alert when error rate exceeds threshold
       MetricName: Errors
       Namespace: SystemsBot
@@ -69,7 +69,7 @@ Resources:
   APIFailureRateAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${Environment}-systems-bot-api-failures"
+      AlarmName: !Sub "slack-agent-${Environment}-systems-bot-api-failures"
       AlarmDescription: Alert when external API success rate drops below 95%
       MetricName: APISuccessRate
       Namespace: SystemsBot
@@ -86,13 +86,13 @@ Resources:
   MessageProcessorErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${Environment}-message-processor-errors"
+      AlarmName: !Sub "slack-agent-${Environment}-message-processor-errors"
       AlarmDescription: Alert when message processor function has errors
       MetricName: Errors
       Namespace: AWS/Lambda
       Dimensions:
         - Name: FunctionName
-          Value: !Sub "${Environment}-message-processor"
+          Value: !Sub "slack-agent-${Environment}-message-processor"
       Statistic: Sum
       Period: 300  # 5 minutes
       EvaluationPeriods: 2
@@ -106,13 +106,13 @@ Resources:
   MessageProcessorThrottleAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${Environment}-message-processor-throttled"
+      AlarmName: !Sub "slack-agent-${Environment}-message-processor-throttled"
       AlarmDescription: Alert when message processor is being throttled
       MetricName: Throttles
       Namespace: AWS/Lambda
       Dimensions:
         - Name: FunctionName
-          Value: !Sub "${Environment}-message-processor"
+          Value: !Sub "slack-agent-${Environment}-message-processor"
       Statistic: Sum
       Period: 300  # 5 minutes
       EvaluationPeriods: 1
@@ -126,7 +126,7 @@ Resources:
   DynamoDBThrottleAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${Environment}-dynamodb-throttled"
+      AlarmName: !Sub "slack-agent-${Environment}-dynamodb-throttled"
       AlarmDescription: Alert when DynamoDB operations are throttled
       MetricName: UserErrors
       Namespace: AWS/DynamoDB
@@ -143,7 +143,7 @@ Resources:
   SystemsBotDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub "${Environment}-systems-bot-monitoring"
+      DashboardName: !Sub "slack-agent-${Environment}-systems-bot-monitoring"
       DashboardBody: !Sub |
         {
           "widgets": [
@@ -217,7 +217,7 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/Lambda", "Invocations", "FunctionName", "${Environment}-message-processor"],
+                  ["AWS/Lambda", "Invocations", "FunctionName", "slack-agent-${Environment}-message-processor"],
                   [".", "Errors", ".", "."],
                   [".", "Duration", ".", ".", {"stat": "Average"}]
                 ],
@@ -230,7 +230,7 @@ Resources:
             {
               "type": "log",
               "properties": {
-                "query": "SOURCE '/aws/lambda/${Environment}-message-processor'\n| fields @timestamp, @message\n| filter @message like /ERROR/\n| sort @timestamp desc\n| limit 20",
+                "query": "SOURCE '/aws/lambda/slack-agent-${Environment}-message-processor'\n| fields @timestamp, @message\n| filter @message like /ERROR/\n| sort @timestamp desc\n| limit 20",
                 "region": "${AWS::Region}",
                 "title": "Recent Errors"
               }
@@ -246,8 +246,8 @@ Outputs:
     Description: SNS Topic ARN for CloudWatch Alarms
     Value: !Ref AlarmTopic
     Export:
-      Name: !Sub "${Environment}-systems-bot-alarm-topic"
+      Name: !Sub "slack-agent-${Environment}-systems-bot-alarm-topic"
   
   DashboardURL:
     Description: CloudWatch Dashboard URL
-    Value: !Sub "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${Environment}-systems-bot-monitoring"
+    Value: !Sub "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=slack-agent-${Environment}-systems-bot-monitoring"

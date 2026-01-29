@@ -240,7 +240,7 @@ After deployment, add secrets to AWS Secrets Manager:
 
 ```bash
 aws secretsmanager put-secret-value \
-  --secret-id systems-bot/dev \
+  --secret-id slack-agent-systems-bot/dev \
   --secret-string '{
     "SLACK_BOT_TOKEN": "xoxb-...",
     "SLACK_SIGNING_SECRET": "...",
@@ -337,7 +337,7 @@ make deploy-prod
 ```bash
 aws cloudformation deploy \
   --template-file cloudwatch-alarms.yaml \
-  --stack-name systems-bot-dev-monitoring \
+  --stack-name slack-agent-systems-bot-dev-monitoring \
   --parameter-overrides \
     Environment=dev \
     AlertEmail=your-email@company.com \
@@ -580,7 +580,7 @@ python3 -m pytest tests/unit/test_config.py::TestConfigValidator -v
 **Solution:** Check AWS Secrets Manager for required secrets
 
 ```bash
-aws secretsmanager get-secret-value --secret-id systems-bot/dev
+aws secretsmanager get-secret-value --secret-id slack-agent-systems-bot/dev
 ```
 
 ### Metrics Not Appearing
@@ -606,7 +606,7 @@ metrics.flush()
 
 ```bash
 aws lambda update-function-configuration \
-  --function-name dev-health \
+  --function-name slack-agent-dev-health \
   --timeout 15
 ```
 
@@ -627,7 +627,7 @@ aws lambda update-function-configuration \
 
 **Check:**
 1. Lambda has DynamoDB permissions for AuditLog table
-2. Table exists: `aws dynamodb describe-table --table-name dev-AuditLog`
+2. Table exists: `aws dynamodb describe-table --table-name slack-agent-dev-AuditLog`
 3. Check Lambda logs for DynamoDB errors
 
 ---

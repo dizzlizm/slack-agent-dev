@@ -76,7 +76,7 @@ class AuditLogger:
             metric_sample_rate: Percentage of events to send metrics (0.0-1.0)
                                Critical events (failures, denials) always send metrics
         """
-        self.table_name = table_name or "dev-AuditLog"
+        self.table_name = table_name or "slack-agent-dev-AuditLog"
         self.retention_days = retention_days
         self.enable_metrics = enable_metrics
         self.metric_sample_rate = metric_sample_rate

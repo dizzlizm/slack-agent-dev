@@ -27,9 +27,9 @@ class TestConfig:
 
     def test_table_name_prefixing(self):
         """Test DynamoDB table name prefixing."""
-        Config.DYNAMODB_TABLE_PREFIX = 'dev-'
-        assert Config.get_table_name('Users') == 'dev-Users'
-        assert Config.get_table_name('Conversations') == 'dev-Conversations'
+        Config.DYNAMODB_TABLE_PREFIX = 'slack-agent-dev-'
+        assert Config.get_table_name('Users') == 'slack-agent-dev-Users'
+        assert Config.get_table_name('Conversations') == 'slack-agent-dev-Conversations'
 
     def test_integration_enabled_checks(self):
         """Test integration enabled checks."""
