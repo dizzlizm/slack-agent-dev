@@ -20,37 +20,33 @@ class ServiceCatalogOperations(FreshserviceClient):
     def list_service_items(
         self,
         category_id: Optional[int] = None,
-        search_query: Optional[str] = None,
         limit: int = 20
     ) -> List[Dict[str, Any]]:
         """
         List available service catalog items.
-        
+
         Service items represent predefined request types with workflows
         (e.g., "New Laptop", "Software License", "Building Access").
         Each has its own custom fields, approval flows, and automation.
-        
+
         Args:
             category_id: Optional category ID to filter by
-            search_query: Optional text search in item name/description
             limit: Maximum number of items to return (default 20)
-            
+
         Returns:
             List of service item dictionaries with id, name, description, category
-            
+
         Raises:
             ValueError: If retrieval fails or configuration missing
         """
         self._ensure_configured()
-        
+
         url = f"{self.base_url}/service_catalog/items"
-        
+
         params = {}
         if category_id:
             params["category_id"] = category_id
-        if search_query:
-            params["query"] = f"name:'{search_query}' OR description:'{search_query}'"
-        
+
         try:
             response = requests.get(
                 url,
@@ -60,9 +56,9 @@ class ServiceCatalogOperations(FreshserviceClient):
                 timeout=10
             )
             response.raise_for_status()
-            
+
             items = response.json().get("service_items", [])
-            
+
             # Return formatted items (limit results)
             return [
                 {
@@ -81,6 +77,62 @@ class ServiceCatalogOperations(FreshserviceClient):
         except requests.RequestException as e:
             logging.error(f"Error listing service items: {e}")
             raise ValueError(f"Failed to list service catalog items: {str(e)}")
+
+    @retry_on_failure(max_retries=3, backoff_factor=0.5)
+    def search_service_items(
+        self,
+        search_term: str,
+        limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        """
+        Search service catalog items by keyword.
+
+        Args:
+            search_term: The keywords to search for in item names/descriptions
+            limit: Maximum number of items to return (default 20)
+
+        Returns:
+            List of matching service item dictionaries
+
+        Raises:
+            ValueError: If search_term is empty or retrieval fails
+        """
+        self._ensure_configured()
+
+        if not search_term or not search_term.strip():
+            raise ValueError("Search term cannot be empty")
+
+        # Freshservice API v2 uses /service_catalog/items/search endpoint
+        url = f"{self.base_url}/service_catalog/items/search?search_term={requests.utils.quote(search_term)}&per_page={limit}"
+
+        try:
+            response = requests.get(
+                url,
+                auth=self._get_auth(),
+                headers=self._get_headers(),
+                timeout=10
+            )
+            response.raise_for_status()
+
+            items = response.json().get("service_items", [])
+
+            return [
+                {
+                    "id": item["id"],
+                    "name": item["name"],
+                    "description": item.get("short_description", ""),
+                    "category_id": item.get("category_id"),
+                    "category_name": item.get("category_name", ""),
+                    "cost": item.get("cost", 0),
+                    "delivery_time": item.get("delivery_time"),
+                    "icon_url": item.get("icon_url"),
+                    "visibility": item.get("visibility", "public")
+                }
+                for item in items[:limit]
+            ]
+        except requests.RequestException as e:
+            logging.error(f"Error searching service items: {e}")
+            raise ValueError(f"Failed to search service catalog items: {str(e)}")
 
     @retry_on_failure(max_retries=3, backoff_factor=0.5)
     def get_service_item(

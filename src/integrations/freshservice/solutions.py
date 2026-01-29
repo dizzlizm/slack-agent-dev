@@ -208,8 +208,8 @@ class SolutionOperations(FreshserviceClient):
         if not query or not query.strip():
             raise ValueError("Search query cannot be empty")
 
-        # Freshservice API v2 uses /search/solutions endpoint with term parameter
-        url = f"{self.base_url}/search/solutions?term={requests.utils.quote(query)}"
+        # Freshservice API v2 uses /solutions/articles/search endpoint with search_term parameter
+        url = f"{self.base_url}/solutions/articles/search?search_term={requests.utils.quote(query)}&per_page={limit}"
 
         try:
             response = requests.get(
@@ -217,8 +217,7 @@ class SolutionOperations(FreshserviceClient):
             )
             response.raise_for_status()
 
-            # Search endpoint returns results in 'results' key, not 'articles'
-            articles = response.json().get("results", [])
+            articles = response.json().get("articles", [])
 
             return [
                 {

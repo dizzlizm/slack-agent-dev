@@ -271,22 +271,39 @@ class FreshserviceTools:
 
     def list_service_items(
         self,
-        category_id: Optional[int] = None,
-        search_query: Optional[str] = None
+        category_id: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
         List available service catalog items.
 
         Args:
             category_id: Optional category ID to filter
-            search_query: Optional search string
 
         Returns:
             List of service item dictionaries
         """
         return self._service_catalog.list_service_items(
-            category_id=category_id,
-            search_query=search_query
+            category_id=category_id
+        )
+
+    def search_service_items(
+        self,
+        search_term: str,
+        limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        """
+        Search service catalog items by keyword.
+
+        Args:
+            search_term: The keywords to search for
+            limit: Maximum number of items to return
+
+        Returns:
+            List of matching service item dictionaries
+        """
+        return self._service_catalog.search_service_items(
+            search_term=search_term,
+            limit=limit
         )
 
     def get_service_item(
@@ -576,6 +593,7 @@ class FreshserviceTools:
             "list_recent_changes": self.list_recent_changes,
             # Service Catalog operations
             "list_service_items": self.list_service_items,
+            "search_service_items": self.search_service_items,
             "get_service_item": self.get_service_item,
             "create_service_request": self.create_service_request,
             "list_service_categories": self.list_service_categories,
