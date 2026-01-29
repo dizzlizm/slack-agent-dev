@@ -34,7 +34,7 @@ class GeminiMCPOrchestrator:
             raise ValueError("Gemini configuration missing.")
 
         self.client = genai.Client(api_key=self.api_key)
-        self.model_name = 'gemini-2.0-flash'
+        self.model_name = 'gemini-2.5-flash'
         self.tools = self._define_all_tools()
 
         # Get direct access to ALL tools (Freshservice, Meraki, Intune)
@@ -207,6 +207,120 @@ class GeminiMCPOrchestrator:
             )
         )
 
+        # === SOLUTIONS (KNOWLEDGE BASE) TOOLS ===
+
+        search_solution_articles = types.FunctionDeclaration(
+            name="search_solution_articles",
+            description=(
+                "Search the Freshservice knowledge base for solution articles by keyword or phrase. "
+                "Use this to find how-to guides, troubleshooting steps, and answers to common questions. "
+                "ALWAYS USE THIS FIRST before creating a ticket for common issues like password resets, VPN setup, etc."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "query": types.Schema(
+                        type=types.Type.STRING,
+                        description="The search query/keywords to find relevant articles."
+                    ),
+                    "limit": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Maximum number of results to return (default 10)."
+                    )
+                },
+                required=["query"]
+            )
+        )
+
+        get_solution_article = types.FunctionDeclaration(
+            name="get_solution_article",
+            description=(
+                "Get the full content of a specific solution article by its ID. "
+                "Use this after searching to retrieve detailed step-by-step instructions."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "article_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="The numeric article ID to retrieve."
+                    )
+                },
+                required=["article_id"]
+            )
+        )
+
+        list_solution_articles = types.FunctionDeclaration(
+            name="list_solution_articles",
+            description=(
+                "Browse solution articles by category or folder. "
+                "Use this to explore available knowledge base content."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "folder_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Optional folder ID to filter articles."
+                    ),
+                    "category_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Optional category ID to filter articles."
+                    ),
+                    "limit": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Maximum number of articles to return (default 20)."
+                    )
+                }
+            )
+        )
+
+        get_popular_articles = types.FunctionDeclaration(
+            name="get_popular_articles",
+            description=(
+                "Get the most popular/viewed solution articles from the knowledge base. "
+                "Use this to see what issues are trending or commonly referenced."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "limit": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Maximum number of articles to return (default 10)."
+                    )
+                }
+            )
+        )
+
+        list_solution_categories = types.FunctionDeclaration(
+            name="list_solution_categories",
+            description=(
+                "List all solution categories in the knowledge base. "
+                "Use this to understand how the knowledge base is organized."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={}  # No parameters required
+            )
+        )
+
+        list_solution_folders = types.FunctionDeclaration(
+            name="list_solution_folders",
+            description=(
+                "List solution folders within categories. "
+                "Use this to browse the knowledge base structure."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "category_id": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Optional category ID to filter folders."
+                    )
+                }
+            )
+        )
+
         # === INTUNE TOOLS ===
 
         reboot_device = types.FunctionDeclaration(
@@ -234,9 +348,11 @@ class GeminiMCPOrchestrator:
         )
 
         return types.Tool(function_declarations=[
-            # Freshservice (8 tools)
+            # Freshservice (14 tools)
             get_user_email, get_user_name, list_tickets, list_assets, list_changes,
             get_ticket_by_id, get_asset_by_id, create_ticket,
+            search_solution_articles, get_solution_article, list_solution_articles,
+            get_popular_articles, list_solution_categories, list_solution_folders,
             # Intune (1 tool)
             reboot_device
         ])
@@ -258,19 +374,25 @@ class GeminiMCPOrchestrator:
         # Build system instruction for intelligent routing
         system_instr = (
             "You are an intelligent IT Support Assistant with access to multiple systems:\n"
-            "- Freshservice: IT tickets, user info, assets, change requests\n"
+            "- Freshservice: IT tickets, user info, assets, change requests, KNOWLEDGE BASE\n"
             "- Intune: Device management (remote reboot, device status)\n\n"
 
             "## IMPORTANT: When to Use Tools vs Answer Directly\n\n"
 
-            "**Answer DIRECTLY without tools for:**\n"
-            "- General knowledge questions (What is VPN? How does DHCP work? What is MFA?)\n"
+            "**ALWAYS Search Knowledge Base FIRST for:**\n"
             "- How-to questions (How do I reset my password? How do I connect to VPN?)\n"
-            "- Troubleshooting advice (Try restarting your computer, clear your cache, etc.)\n"
-            "- Definitions and explanations\n"
-            "- ANY question that starts with 'what is', 'how do I', 'why does', etc.\n\n"
+            "- Common issues (Can't login, forgot password, VPN not working, etc.)\n"
+            "- Setup instructions (Setting up email, configuring software, etc.)\n"
+            "- Troubleshooting steps (Computer won't start, printer issues, etc.)\n"
+            "USE search_solution_articles() to find existing articles before answering!\n\n"
 
-            "**Use tools ONLY for:**\n"
+            "**Answer DIRECTLY without tools for:**\n"
+            "- General knowledge questions IF no relevant KB article exists\n"
+            "- Definitions and explanations of basic IT concepts\n"
+            "- Quick troubleshooting advice if KB search returns nothing\n\n"
+
+            "**Use tools for:**\n"
+            "- Searching KB: search_solution_articles(), get_solution_article()\n"
             "- Looking up specific tickets, assets, or users in Freshservice\n"
             "- Creating tickets when user is reporting an actual problem or issue\n"
             "- Checking if there are planned outages (list_recent_changes)\n"
@@ -288,10 +410,18 @@ class GeminiMCPOrchestrator:
             "- Simple questions about technology concepts\n"
             "- Requests for information or explanations\n"
             "- General troubleshooting advice\n"
-            "ONLY create tickets when user says things like: 'my laptop is broken', 'I need help with X not working', 'create a ticket for...'\n\n"
+            "ONLY create tickets when user says things like: 'my laptop is broken', 'I need help with X not working', 'create a ticket for...'\n"
+            "ALWAYS search the knowledge base FIRST - you may find a self-service article that solves their issue!\n\n"
 
             "## How to Handle User Queries\n"
             "When a user asks a question, intelligently choose which tool(s) to use and chain them together:\n\n"
+
+            "**Knowledge Base Workflow (PRIORITY #1):**\n"
+            "1. User asks 'How do I reset my password?' → search_solution_articles('password reset') → get_solution_article(id) → provide steps + link\n"
+            "2. User asks 'VPN not working' → search_solution_articles('VPN troubleshooting') → show top articles\n"
+            "3. Check get_popular_articles() to see what issues are trending\n"
+            "4. If article found, provide the solution AND the article URL for reference\n"
+            "5. Only create ticket if NO relevant KB article exists\n\n"
 
             "**Looking up users:**\n"
             "- If you see email addresses in the query (especially in [Mentioned users: ...] context), use get_user_by_email\n"
