@@ -9,6 +9,8 @@ from .tickets import TicketOperations
 from .assets import AssetOperations
 from .changes import ChangeOperations
 from .solutions import SolutionOperations
+from .service_catalog import ServiceCatalogOperations
+from .problems import ProblemOperations
 
 
 class FreshserviceTools:
@@ -24,6 +26,8 @@ class FreshserviceTools:
         self._assets = AssetOperations()
         self._changes = ChangeOperations()
         self._solutions = SolutionOperations()
+        self._service_catalog = ServiceCatalogOperations()
+        self._problems = ProblemOperations()
 
     # --- USER OPERATIONS ---
 
@@ -129,6 +133,73 @@ class FreshserviceTools:
             category=category,
         )
 
+    def update_ticket(
+        self,
+        ticket_id: int,
+        status: Optional[int] = None,
+        priority: Optional[int] = None,
+        agent_id: Optional[int] = None,
+        group_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Update an existing ticket.
+
+        Args:
+            ticket_id: The ticket ID to update
+            status: New status (2=Open, 3=Pending, 4=Resolved, 5=Closed)
+            priority: New priority (1=Low, 2=Medium, 3=High, 4=Urgent)
+            agent_id: Assign to agent ID
+            group_id: Assign to group ID
+
+        Returns:
+            Dictionary with updated ticket details
+        """
+        return self._tickets.update_ticket(
+            ticket_id=ticket_id,
+            status=status,
+            priority=priority,
+            agent_id=agent_id,
+            group_id=group_id
+        )
+
+    def add_ticket_note(
+        self,
+        ticket_id: int,
+        body: str,
+        private: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Add a note/comment to an existing ticket.
+
+        Args:
+            ticket_id: The ticket ID
+            body: Note content
+            private: Whether note is private (internal only)
+
+        Returns:
+            Dictionary confirming note creation
+        """
+        return self._tickets.add_ticket_note(
+            ticket_id=ticket_id,
+            body=body,
+            private=private
+        )
+
+    def get_ticket_conversations(
+        self,
+        ticket_id: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all conversations/notes for a ticket.
+
+        Args:
+            ticket_id: The ticket ID
+
+        Returns:
+            List of conversation dictionaries
+        """
+        return self._tickets.get_ticket_conversations(ticket_id)
+
     # --- ASSET OPERATIONS ---
 
     def list_assets(self, user_id: int) -> List[Dict[str, Any]]:
@@ -155,6 +226,36 @@ class FreshserviceTools:
         """
         return self._assets.get_asset_by_id(asset_id)
 
+    def get_asset_software(
+        self,
+        asset_id: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Get software installed on an asset.
+
+        Args:
+            asset_id: The asset ID
+
+        Returns:
+            List of installed software dictionaries
+        """
+        return self._assets.get_asset_software(asset_id)
+
+    def get_asset_contracts(
+        self,
+        asset_id: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Get contracts associated with an asset.
+
+        Args:
+            asset_id: The asset ID
+
+        Returns:
+            List of contract dictionaries with warranty/support details
+        """
+        return self._assets.get_asset_contracts(asset_id)
+
     # --- CHANGE OPERATIONS ---
 
     def list_recent_changes(self) -> List[Dict[str, Any]]:
@@ -165,6 +266,195 @@ class FreshserviceTools:
             List of change dictionaries
         """
         return self._changes.list_recent_changes()
+
+    # --- SERVICE CATALOG OPERATIONS ---
+
+    def list_service_items(
+        self,
+        category_id: Optional[int] = None,
+        search_query: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        List available service catalog items.
+
+        Args:
+            category_id: Optional category ID to filter
+            search_query: Optional search string
+
+        Returns:
+            List of service item dictionaries
+        """
+        return self._service_catalog.list_service_items(
+            category_id=category_id,
+            search_query=search_query
+        )
+
+    def get_service_item(
+        self,
+        item_id: int
+    ) -> Dict[str, Any]:
+        """
+        Get detailed information about a service catalog item.
+
+        Args:
+            item_id: The service item ID
+
+        Returns:
+            Dictionary with service item details and custom fields
+        """
+        return self._service_catalog.get_service_item(item_id)
+
+    def create_service_request(
+        self,
+        service_item_id: int,
+        requester_email: str,
+        custom_fields: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Create a service request from catalog item.
+
+        Args:
+            service_item_id: The service item ID
+            requester_email: Email of requester
+            custom_fields: Item-specific custom fields
+
+        Returns:
+            Dictionary with service request details
+        """
+        # Look up requester ID
+        try:
+            requester_info = self.get_user_by_email(requester_email)
+            requester_id = requester_info["id"]
+        except ValueError:
+            raise ValueError(f"Could not find user with email {requester_email}")
+        
+        return self._service_catalog.create_service_request(
+            service_item_id=service_item_id,
+            requester_id=requester_id,
+            custom_fields=custom_fields
+        )
+
+    def list_service_categories(self) -> List[Dict[str, Any]]:
+        """
+        List all service catalog categories.
+
+        Returns:
+            List of category dictionaries
+        """
+        return self._service_catalog.list_service_categories()
+
+    def get_service_request_status(
+        self,
+        service_request_id: int
+    ) -> Dict[str, Any]:
+        """
+        Get status of a service request including approval and fulfillment.
+
+        Args:
+            service_request_id: The service request ID
+
+        Returns:
+            Dictionary with request status and tracking details
+        """
+        return self._service_catalog.get_service_request_status(service_request_id)
+
+    # --- PROBLEM MANAGEMENT OPERATIONS ---
+
+    def list_problems(
+        self,
+        status: Optional[int] = None,
+        priority: Optional[int] = None,
+        impact: Optional[int] = None,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        List problems in Freshservice.
+
+        Args:
+            status: Filter by status (1=Open, 2=Change Requested, 3=Closed)
+            priority: Filter by priority (1=Low, 2=Medium, 3=High, 4=Urgent)
+            impact: Filter by impact (1=Low, 2=Medium, 3=High)
+            limit: Maximum number of results
+
+        Returns:
+            List of problem dictionaries
+        """
+        return self._problems.list_problems(
+            status=status,
+            priority=priority,
+            impact=impact,
+            limit=limit
+        )
+
+    def get_problem_by_id(
+        self,
+        problem_id: int
+    ) -> Dict[str, Any]:
+        """
+        Get detailed information about a specific problem.
+
+        Args:
+            problem_id: The problem ID
+
+        Returns:
+            Dictionary with complete problem details
+        """
+        return self._problems.get_problem_by_id(problem_id)
+
+    def link_ticket_to_problem(
+        self,
+        ticket_id: int,
+        problem_id: int
+    ) -> Dict[str, Any]:
+        """
+        Associate a ticket with a known problem.
+
+        Args:
+            ticket_id: The ticket ID to link
+            problem_id: The problem ID to link to
+
+        Returns:
+            Dictionary confirming the link
+        """
+        return self._problems.link_ticket_to_problem(
+            ticket_id=ticket_id,
+            problem_id=problem_id
+        )
+
+    def get_problem_tickets(
+        self,
+        problem_id: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all tickets associated with a problem.
+
+        Args:
+            problem_id: The problem ID
+
+        Returns:
+            List of associated ticket dictionaries
+        """
+        return self._problems.get_problem_tickets(problem_id)
+
+    def search_problems(
+        self,
+        query: str,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Search problems by keyword.
+
+        Args:
+            query: Search term
+            limit: Maximum number of results
+
+        Returns:
+            List of matching problem dictionaries
+        """
+        return self._problems.search_problems(
+            query=query,
+            limit=limit
+        )
 
     # --- SOLUTION OPERATIONS ---
 
@@ -267,14 +557,36 @@ class FreshserviceTools:
             ValueError: If tool not found or execution fails
         """
         tool_map = {
+            # User operations
             "get_user_by_email": self.get_user_by_email,
             "get_user_by_name": self.get_user_by_name,
+            # Ticket operations
             "list_tickets": self.list_tickets,
-            "list_assets": self.list_assets,
-            "list_recent_changes": self.list_recent_changes,
             "get_ticket_by_id": self.get_ticket_by_id,
-            "get_asset_by_id": self.get_asset_by_id,
             "create_ticket": self.create_ticket,
+            "update_ticket": self.update_ticket,
+            "add_ticket_note": self.add_ticket_note,
+            "get_ticket_conversations": self.get_ticket_conversations,
+            # Asset operations
+            "list_assets": self.list_assets,
+            "get_asset_by_id": self.get_asset_by_id,
+            "get_asset_software": self.get_asset_software,
+            "get_asset_contracts": self.get_asset_contracts,
+            # Change operations
+            "list_recent_changes": self.list_recent_changes,
+            # Service Catalog operations
+            "list_service_items": self.list_service_items,
+            "get_service_item": self.get_service_item,
+            "create_service_request": self.create_service_request,
+            "list_service_categories": self.list_service_categories,
+            "get_service_request_status": self.get_service_request_status,
+            # Problem Management operations
+            "list_problems": self.list_problems,
+            "get_problem_by_id": self.get_problem_by_id,
+            "link_ticket_to_problem": self.link_ticket_to_problem,
+            "get_problem_tickets": self.get_problem_tickets,
+            "search_problems": self.search_problems,
+            # Solution operations
             "list_solution_articles": self.list_solution_articles,
             "get_solution_article": self.get_solution_article,
             "search_solution_articles": self.search_solution_articles,

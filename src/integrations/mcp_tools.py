@@ -107,8 +107,23 @@ class UnifiedTools:
         """
         # Freshservice tools
         if tool_name in [
-            "get_user_by_email", "get_user_by_name", "list_tickets", "list_assets", "list_recent_changes",
-            "get_ticket_by_id", "get_asset_by_id", "create_ticket",
+            # User operations
+            "get_user_by_email", "get_user_by_name",
+            # Ticket operations  
+            "list_tickets", "get_ticket_by_id", "create_ticket",
+            "update_ticket", "add_ticket_note", "get_ticket_conversations",
+            # Asset operations
+            "list_assets", "get_asset_by_id",
+            "get_asset_software", "get_asset_contracts",
+            # Change operations
+            "list_recent_changes",
+            # Service Catalog operations
+            "list_service_items", "get_service_item", "create_service_request",
+            "list_service_categories", "get_service_request_status",
+            # Problem Management operations
+            "list_problems", "get_problem_by_id", "link_ticket_to_problem",
+            "get_problem_tickets", "search_problems",
+            # Solution operations
             "list_solution_articles", "get_solution_article", "search_solution_articles",
             "list_solution_categories", "list_solution_folders", "get_popular_articles"
         ]:
@@ -120,10 +135,26 @@ class UnifiedTools:
 
         else:
             available = [
-                "get_user_by_email", "get_user_by_name", "list_tickets", "list_assets", "list_recent_changes",
-                "get_ticket_by_id", "get_asset_by_id", "create_ticket",
+                # User operations
+                "get_user_by_email", "get_user_by_name",
+                # Ticket operations
+                "list_tickets", "get_ticket_by_id", "create_ticket",
+                "update_ticket", "add_ticket_note", "get_ticket_conversations",
+                # Asset operations
+                "list_assets", "get_asset_by_id",
+                "get_asset_software", "get_asset_contracts",
+                # Change operations
+                "list_recent_changes",
+                # Service Catalog operations
+                "list_service_items", "get_service_item", "create_service_request",
+                "list_service_categories", "get_service_request_status",
+                # Problem Management operations
+                "list_problems", "get_problem_by_id", "link_ticket_to_problem",
+                "get_problem_tickets", "search_problems",
+                # Solution operations
                 "list_solution_articles", "get_solution_article", "search_solution_articles",
                 "list_solution_categories", "list_solution_folders", "get_popular_articles",
+                # Intune operations
                 "reboot_device"
             ]
             raise ValueError(f"Tool '{tool_name}' not found. Available tools: {available}")
