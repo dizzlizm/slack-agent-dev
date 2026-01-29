@@ -1,0 +1,253 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudWatch Alarms and Dashboards for Systems Bot Observability
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, prod]
+  
+  AlertEmail:
+    Type: String
+    Description: Email address for CloudWatch alarms
+    Default: ""
+  
+  HighCostThreshold:
+    Type: Number
+    Description: Alert when audit events exceed this per day (cost control)
+    Default: 50000
+
+Resources:
+  # SNS Topic for Alarms
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${Environment}-systems-bot-alarms"
+      DisplayName: Systems Bot Monitoring Alarms
+      Subscription:
+        - !If
+          - HasAlertEmail
+          - Endpoint: !Ref AlertEmail
+            Protocol: email
+          - !Ref AWS::NoValue
+
+  # Cost Control Alarm - High Audit Volume
+  HighAuditVolumeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-systems-bot-high-audit-volume"
+      AlarmDescription: Alert when audit event volume is unusually high (potential cost issue or infinite loop)
+      MetricName: AuditEvents
+      Namespace: SystemsBot/Audit
+      Statistic: Sum
+      Period: 86400  # 24 hours
+      EvaluationPeriods: 1
+      Threshold: !Ref HighCostThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  # Error Rate Alarm
+  HighErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-systems-bot-high-error-rate"
+      AlarmDescription: Alert when error rate exceeds threshold
+      MetricName: Errors
+      Namespace: SystemsBot
+      Statistic: Sum
+      Period: 3600  # 1 hour
+      EvaluationPeriods: 1
+      Threshold: 100
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  # API Failure Rate Alarm
+  APIFailureRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-systems-bot-api-failures"
+      AlarmDescription: Alert when external API success rate drops below 95%
+      MetricName: APISuccessRate
+      Namespace: SystemsBot
+      Statistic: Average
+      Period: 3600  # 1 hour
+      EvaluationPeriods: 2
+      Threshold: 95
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  # Lambda Error Alarm
+  MessageProcessorErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-message-processor-errors"
+      AlarmDescription: Alert when message processor function has errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub "${Environment}-message-processor"
+      Statistic: Sum
+      Period: 300  # 5 minutes
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  # Lambda Throttle Alarm
+  MessageProcessorThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-message-processor-throttled"
+      AlarmDescription: Alert when message processor is being throttled
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub "${Environment}-message-processor"
+      Statistic: Sum
+      Period: 300  # 5 minutes
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  # DynamoDB Throttle Alarm
+  DynamoDBThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-dynamodb-throttled"
+      AlarmDescription: Alert when DynamoDB operations are throttled
+      MetricName: UserErrors
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 300  # 5 minutes
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  # CloudWatch Dashboard
+  SystemsBotDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub "${Environment}-systems-bot-monitoring"
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["SystemsBot", "ToolInvocations", {"stat": "Sum"}],
+                  [".", "ToolSuccessRate", {"stat": "Average"}]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Tool Invocations & Success Rate",
+                "yAxis": {
+                  "left": {
+                    "label": "Count"
+                  },
+                  "right": {
+                    "label": "Percent"
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["SystemsBot", "ToolLatency", {"stat": "Average"}],
+                  ["...", {"stat": "Maximum"}],
+                  ["...", {"stat": "Minimum"}]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Tool Latency (ms)",
+                "yAxis": {
+                  "left": {
+                    "label": "Milliseconds"
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["SystemsBot", "Errors", {"stat": "Sum"}],
+                  ["SystemsBot/Audit", "AuditEvents", {"stat": "Sum"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Errors & Audit Events"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["SystemsBot", "APILatency", "Service", "FreshService", {"stat": "Average"}],
+                  ["...", "Slack", {"stat": "Average"}]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "External API Latency"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", "FunctionName", "${Environment}-message-processor"],
+                  [".", "Errors", ".", "."],
+                  [".", "Duration", ".", ".", {"stat": "Average"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Message Processor Lambda"
+              }
+            },
+            {
+              "type": "log",
+              "properties": {
+                "query": "SOURCE '/aws/lambda/${Environment}-message-processor'\n| fields @timestamp, @message\n| filter @message like /ERROR/\n| sort @timestamp desc\n| limit 20",
+                "region": "${AWS::Region}",
+                "title": "Recent Errors"
+              }
+            }
+          ]
+        }
+
+Conditions:
+  HasAlertEmail: !Not [!Equals [!Ref AlertEmail, ""]]
+
+Outputs:
+  AlarmTopicArn:
+    Description: SNS Topic ARN for CloudWatch Alarms
+    Value: !Ref AlarmTopic
+    Export:
+      Name: !Sub "${Environment}-systems-bot-alarm-topic"
+  
+  DashboardURL:
+    Description: CloudWatch Dashboard URL
+    Value: !Sub "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${Environment}-systems-bot-monitoring"
