@@ -234,3 +234,126 @@ class Config:
             Prefixed table name (e.g., 'dev-AuthorizedUsers')
         """
         return f"{cls.DYNAMODB_TABLE_PREFIX}{base_name}"
+
+
+class ConfigValidator:
+    """
+    Validate configuration at startup to fail fast.
+    
+    This class checks all required configuration values and provides
+    clear error messages when configuration is missing or invalid.
+    """
+
+    # Required secrets for basic operation
+    REQUIRED_SECRETS = {
+        'SLACK_BOT_TOKEN': 'Slack bot token',
+        'SLACK_SIGNING_SECRET': 'Slack signing secret for request verification',
+        'GEMINI_API_KEY': 'Google Gemini API key for AI functionality'
+    }
+
+    # Optional secrets that enable additional features
+    OPTIONAL_SECRETS = {
+        'FRESHSERVICE_API_KEY': 'FreshService integration',
+        'FRESHSERVICE_DOMAIN': 'FreshService domain',
+        'INTUNE_REBOOT_WEBHOOK_URL': 'Intune device management'
+    }
+
+    @classmethod
+    def validate_all(cls) -> List[str]:
+        """
+        Validate all configuration and return warnings.
+        
+        Returns:
+            List of warning messages for optional missing configuration
+            
+        Raises:
+            ConfigurationError: If required configuration is missing
+        """
+        from src.exceptions import ConfigurationError
+        
+        warnings = []
+
+        # Check required secrets
+        for secret_name, description in cls.REQUIRED_SECRETS.items():
+            value = getattr(Config, secret_name, None)
+            if not value or (isinstance(value, str) and not value.strip()):
+                raise ConfigurationError(
+                    f"Missing required configuration: {secret_name} ({description})"
+                )
+
+        # Check optional secrets and collect warnings
+        for secret_name, description in cls.OPTIONAL_SECRETS.items():
+            value = getattr(Config, secret_name, None)
+            if not value or (isinstance(value, str) and not value.strip()):
+                warnings.append(
+                    f"Optional configuration missing: {secret_name} ({description} will be disabled)"
+                )
+
+        # Validate monitored channels if specified
+        if Config.MONITORED_SLACK_CHANNEL_IDS:
+            if not isinstance(Config.MONITORED_SLACK_CHANNEL_IDS, list):
+                raise ConfigurationError(
+                    "MONITORED_SLACK_CHANNEL_IDS must be a list"
+                )
+            for channel_id in Config.MONITORED_SLACK_CHANNEL_IDS:
+                if not isinstance(channel_id, str) or not channel_id.strip():
+                    raise ConfigurationError(
+                        f"Invalid channel ID in MONITORED_SLACK_CHANNEL_IDS: {channel_id}"
+                    )
+
+        # Validate numeric settings
+        if Config.RATE_LIMIT_REQUESTS <= 0:
+            raise ConfigurationError("RATE_LIMIT_REQUESTS must be positive")
+        
+        if Config.RATE_LIMIT_WINDOW_SECONDS <= 0:
+            raise ConfigurationError("RATE_LIMIT_WINDOW_SECONDS must be positive")
+        
+        if Config.MAX_CONVERSATION_HISTORY <= 0:
+            raise ConfigurationError("MAX_CONVERSATION_HISTORY must be positive")
+
+        # Validate FreshService configuration consistency
+        if Config.FRESHSERVICE_API_KEY and not Config.FRESHSERVICE_DOMAIN:
+            raise ConfigurationError(
+                "FRESHSERVICE_API_KEY provided but FRESHSERVICE_DOMAIN is missing"
+            )
+        if Config.FRESHSERVICE_DOMAIN and not Config.FRESHSERVICE_API_KEY:
+            raise ConfigurationError(
+                "FRESHSERVICE_DOMAIN provided but FRESHSERVICE_API_KEY is missing"
+            )
+
+        return warnings
+
+    @classmethod
+    def validate_and_log(cls) -> None:
+        """
+        Validate configuration and log results.
+        
+        This is the recommended method to call during application startup.
+        It validates configuration, logs warnings, and raises errors for
+        critical missing configuration.
+        """
+        logging.info("Validating configuration...")
+        
+        try:
+            warnings = cls.validate_all()
+            
+            logging.info("✓ Configuration validation passed")
+            
+            # Log enabled integrations
+            integrations = []
+            if Config.is_gemini_enabled():
+                integrations.append("Gemini")
+            if Config.is_freshservice_enabled():
+                integrations.append("FreshService")
+            if Config.is_intune_enabled():
+                integrations.append("Intune")
+            
+            logging.info(f"Enabled integrations: {', '.join(integrations) if integrations else 'None'}")
+            
+            # Log warnings for optional missing configuration
+            for warning in warnings:
+                logging.warning(f"⚠ {warning}")
+                
+        except Exception as e:
+            logging.error(f"✗ Configuration validation failed: {e}")
+            raise
