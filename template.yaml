@@ -100,6 +100,53 @@ Resources:
         AttributeName: TTL
         Enabled: true
 
+  AuditLogTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${Environment}-AuditLog"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: resource_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: UserIndex
+          KeySchema:
+            - AttributeName: user_id
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: ResourceIndex
+          KeySchema:
+            - AttributeName: resource_id
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Purpose
+          Value: AuditCompliance
+        - Key: RetentionDays
+          Value: "365"
+
   # Lambda Functions
   SlackEventsFunction:
     Type: AWS::Serverless::Function
@@ -117,6 +164,8 @@ Resources:
             TableName: !Ref ConversationHistoryTable
         - DynamoDBCrudPolicy:
             TableName: !Ref TriageSessionsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AuditLogTable
         - Statement:
             - Effect: Allow
               Action: secretsmanager:GetSecretValue
@@ -125,6 +174,11 @@ Resources:
             - Effect: Allow
               Action: lambda:InvokeFunction
               Resource: !GetAtt MessageProcessorFunction.Arn
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: "*"
       Events:
         Api:
           Type: Api
@@ -147,10 +201,17 @@ Resources:
             TableName: !Ref ConversationHistoryTable
         - DynamoDBCrudPolicy:
             TableName: !Ref TriageSessionsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AuditLogTable
         - Statement:
             - Effect: Allow
               Action: secretsmanager:GetSecretValue
               Resource: !Ref BotSecrets
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: "*"
 
   SlackInteractiveFunction:
     Type: AWS::Serverless::Function
@@ -164,10 +225,17 @@ Resources:
             TableName: !Ref ConversationHistoryTable
         - DynamoDBCrudPolicy:
             TableName: !Ref TriageSessionsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AuditLogTable
         - Statement:
             - Effect: Allow
               Action: secretsmanager:GetSecretValue
               Resource: !Ref BotSecrets
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: "*"
       Events:
         Api:
           Type: Api
@@ -188,6 +256,22 @@ Resources:
             - Effect: Allow
               Action: secretsmanager:GetSecretValue
               Resource: !Ref BotSecrets
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:DescribeSecret
+              Resource: !Ref BotSecrets
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:DescribeTable
+              Resource:
+                - !GetAtt ConversationHistoryTable.Arn
+                - !GetAtt AuditLogTable.Arn
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: "*"
       Events:
         Api:
           Type: Api
@@ -203,3 +287,14 @@ Outputs:
   SecretArn:
     Description: Secrets Manager ARN
     Value: !Ref BotSecrets
+  AuditLogTableName:
+    Description: Audit Log DynamoDB Table Name
+    Value: !Ref AuditLogTable
+    Export:
+      Name: !Sub "${Environment}-AuditLogTableName"
+  HealthEndpoint:
+    Description: Health Check Endpoint
+    Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/health"
+  HealthDetailedEndpoint:
+    Description: Detailed Health Check Endpoint
+    Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/health?detailed=true"
