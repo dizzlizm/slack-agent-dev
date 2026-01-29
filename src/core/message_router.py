@@ -1,6 +1,61 @@
 """
-Message routing for Slack messages.
-Routes incoming messages to appropriate handlers.
+Message Routing and Handler Dispatch Module.
+
+This module provides the core message routing logic that determines how to handle
+incoming Slack messages based on context, mentions, threads, and user commands.
+
+Architecture Overview:
+    Slack Event → Lambda Handler → MessageRouter.route_message()
+         ↓
+    Authorization Check → Command Detection → Handler Selection
+         ↓
+    Execute Handler (Gemini MCP | Command | Triage) → Post Response to Slack
+
+Routing Logic:
+    1. **Authorization**: Check if user is authorized via AuthorizationManager
+    2. **Command Detection**: Parse message for bot commands (/help, /ping, etc.)
+    3. **Context Analysis**: Determine if message is in thread, mentions bot, etc.
+    4. **Handler Selection**:
+       - Direct messages → Gemini MCP Orchestrator
+       - @mentions → Gemini MCP Orchestrator
+       - Thread replies → Context-aware routing (triage vs conversation)
+       - Commands → CommandParser
+    5. **Response**: Post AI response or command result back to Slack
+
+Key Components:
+    - MessageRouter: Main routing class
+    - Global singletons: _slack_client, _mcp_orchestrator, storage managers
+    - Lazy initialization: Services initialized on first message
+
+Supported Message Types:
+    - Direct messages (DMs)
+    - Channel messages with @bot mention
+    - Thread replies (triage sessions or conversations)
+    - Bot commands (/help, /ping, /list)
+
+Handler Priority:
+    1. Commands (highest) - /help, /ping override everything
+    2. Triage sessions - Active troubleshooting workflows
+    3. Conversation threads - Follow-up questions
+    4. New conversations - @mentions or DMs
+
+Error Handling:
+    - Authorization failures → Silent ignore (not authorized message)
+    - Gemini errors → User-friendly error message
+    - Storage errors → Graceful degradation
+    - Rate limiting → Enforced at security layer
+
+Performance Notes:
+    - Singleton pattern for service reuse across Lambda invocations
+    - Lazy initialization to reduce cold start time
+    - Conversation history limited to MAX_CONVERSATION_HISTORY messages
+    - DynamoDB queries optimized with GSIs
+
+See Also:
+    - src/integrations/mcp_integration.py: Gemini AI orchestration
+    - src/core/command_parser.py: Command handling
+    - src/core/triage_workflow.py: Troubleshooting workflows
+    - src/storage/: DynamoDB storage managers
 """
 import logging
 from typing import Any, Optional

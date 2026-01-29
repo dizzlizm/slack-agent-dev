@@ -1,12 +1,59 @@
 """
-Optimized MCP Integration for Gemini + All IT Tools.
+MCP (Model Context Protocol) Integration for Gemini + IT Tools.
 
-This module provides an orchestrator that connects Google Gemini AI with all IT tools:
-- Freshservice (tickets, users, assets, changes)
-- Meraki (WiFi management)
-- Intune (device management)
+This module implements the GeminiMCPOrchestrator which connects Google Gemini AI
+with IT service management tools using the Model Context Protocol pattern.
 
-It uses DIRECT function calls for maximum performance instead of HTTP requests.
+Architecture Overview:
+    The orchestrator acts as a bridge between conversational AI (Gemini) and
+    IT tools (FreshService, Intune, etc.). It follows this pattern:
+    
+    User Query → Gemini (with tool schemas) → Tool Selection → Tool Execution
+         ↑                                                           ↓
+         └──────────────────── Final Response ←───────────────────┘
+
+Key Components:
+    - GeminiMCPOrchestrator: Main orchestrator class
+    - FunctionDeclaration: Tool schema definitions for Gemini
+    - UnifiedTools: Backend tool implementations
+    
+Supported Integrations:
+    - FreshService (29 tools): Tickets, Assets, Service Catalog, Problems, Solutions
+    - Intune (1 tool): Device reboot
+    
+Tool Categories:
+    1. User Operations: get_user_by_email, get_user_by_name
+    2. Ticket Management: create_ticket, update_ticket, add_ticket_note, list_tickets
+    3. Asset Management: list_assets, get_asset_software, get_asset_contracts
+    4. Service Catalog: list_service_items, create_service_request
+    5. Problem Management: search_problems, link_ticket_to_problem
+    6. Knowledge Base: search_solution_articles, get_solution_article
+    7. Device Management: reboot_device (Intune)
+
+Usage Example:
+    ```python
+    orchestrator = GeminiMCPOrchestrator()
+    response = orchestrator.process_query(
+        user_query="What are my open tickets?",
+        user_email="user@company.com"
+    )
+    ```
+
+Performance Characteristics:
+    - Direct function calls (no HTTP overhead)
+    - Streaming not supported (returns full response)
+    - Average latency: 2-5 seconds for simple queries
+    - Tool execution adds 0.5-2s per tool call
+
+Design Philosophy:
+    - Gemini decides which tools to call based on natural language understanding
+    - Tools are stateless and idempotent where possible
+    - System instructions guide Gemini toward knowledge base first, ticket creation last
+    - Sensitive actions (reboot) require explicit user confirmation
+
+See Also:
+    - src/integrations/mcp_tools.py: Tool implementations
+    - src/integrations/freshservice/tools.py: FreshService operations
 """
 import logging
 from typing import Optional
